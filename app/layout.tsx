@@ -1,16 +1,21 @@
-import type React from "react";
-import type { Metadata } from "next";
+import type React from "react"
+import type { Metadata } from "next"
 
-import "./globals.css";
+import "./globals.css"
 import { ConditionalLayout } from "@/components/conditional-layout"
-import { Source_Serif_4 } from "next/font/google";
+import { Geist, Source_Serif_4 } from "next/font/google"
+
+const geistSans = Geist({
+  subsets: ["latin"],
+  variable: "--font-geist-sans",
+})
 
 // Google font loaders MUST be assigned to a const at module scope
 const sourceSerif = Source_Serif_4({
-  weight: ["200","300","400","500","600","700","800","900"],
+  weight: ["200", "300", "400", "500", "600", "700", "800", "900"],
   subsets: ["latin"],
   variable: "--font-source-serif",
-});
+})
 
 export const metadata: Metadata = {
   title: "vidAI",
@@ -18,14 +23,12 @@ export const metadata: Metadata = {
     generator: 'v0.app'
 }
 
-export default function RootLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html lang="en" className={`${geistSans.variable} ${sourceSerif.variable}`}>
+      <body className={geistSans.className}>
         <ConditionalLayout>{children}</ConditionalLayout>
       </body>
     </html>
-  );
+  )
 }
