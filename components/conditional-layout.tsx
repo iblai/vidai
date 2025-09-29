@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AppHeader } from "@/components/app-header"
+import { Footer } from "@/components/footer"
 
 interface ConditionalLayoutProps {
   children: React.ReactNode
@@ -26,7 +27,10 @@ export function ConditionalLayout({ children }: ConditionalLayoutProps) {
       <div className="flex h-screen w-full">
         <div className="flex flex-1 flex-col overflow-hidden">
           <AppHeader />
-          <main className="flex-1 overflow-auto bg-white">{children}</main>
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <main className="flex-1 overflow-auto bg-white">{children}</main>
+            <Footer />
+          </div>
         </div>
       </div>
     </SidebarProvider>

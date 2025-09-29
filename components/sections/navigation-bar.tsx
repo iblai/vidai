@@ -53,7 +53,7 @@ export function NavigationBar({
               }`}
             >
               <Image
-                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/video-nNGnyMGYSMEdxdPIsSfLbQRossma1D.png"
+                src="/images/design-mode/video.png"
                 alt="Watch"
                 width={20}
                 height={20}
@@ -76,7 +76,7 @@ export function NavigationBar({
               }`}
             >
               <Image
-                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/pricing-h7Fw8scUBTU7KYOH4qCqcNDl3b4GXE.png"
+                src="/images/design-mode/pricing.png"
                 alt="Pricing"
                 width={20}
                 height={20}
@@ -99,7 +99,7 @@ export function NavigationBar({
               }`}
             >
               <Image
-                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/faq-ZL5OS0azsihvuVj1xxvUCitJTUloM8.png"
+                src="/images/design-mode/faq.png"
                 alt="FAQ"
                 width={20}
                 height={20}
@@ -155,7 +155,7 @@ export function NavigationBar({
                 }`}
               >
                 <Image
-                  src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/video-nNGnyMGYSMEdxdPIsSfLbQRossma1D.png"
+                  src="/images/design-mode/video.png"
                   alt="Watch"
                   width={20}
                   height={20}
@@ -181,7 +181,7 @@ export function NavigationBar({
                 }`}
               >
                 <Image
-                  src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/pricing-h7Fw8scUBTU7KYOH4qCqcNDl3b4GXE.png"
+                  src="/images/design-mode/pricing.png"
                   alt="Pricing"
                   width={20}
                   height={20}
@@ -207,7 +207,7 @@ export function NavigationBar({
                 }`}
               >
                 <Image
-                  src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/faq-ZL5OS0azsihvuVj1xxvUCitJTUloM8.png"
+                  src="/images/design-mode/faq.png"
                   alt="FAQ"
                   width={20}
                   height={20}

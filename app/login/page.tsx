@@ -555,7 +555,7 @@ export default function LoginPage() {
                 <div className="flex flex-col items-center justify-center w-full max-w-md text-center">
                   <div className="mb-4">
                     <Image
-                      src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/message_icon-5pRJ9ASjtLx1v1TwLlpnyww9lxJm43.png"
+                      src="/images/design-mode/message_icon.png"
                       alt="Email Sent"
                       width={viewportHeight < 600 ? 60 : 80}
                       height={viewportHeight < 600 ? 60 : 80}
@@ -602,7 +602,7 @@ export default function LoginPage() {
                         }`}
                       >
                         <Image
-                          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/video-nNGnyMGYSMEdxdPIsSfLbQRossma1D.png"
+                          src="/images/design-mode/video.png"
                           alt="Watch"
                           width={24}
                           height={24}
@@ -617,7 +617,7 @@ export default function LoginPage() {
                         }`}
                       >
                         <Image
-                          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/pricing-h7Fw8scUBTU7KYOH4qCqcNDl3b4GXE.png"
+                          src="/images/design-mode/pricing.png"
                           alt="Pricing"
                           width={24}
                           height={24}
@@ -632,7 +632,7 @@ export default function LoginPage() {
                         }`}
                       >
                         <Image
-                          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/faq-ZL5OS0azsihvuVj1xxvUCitJTUloM8.png"
+                          src="/images/design-mode/faq.png"
                           alt="FAQ"
                           width={24}
                           height={24}
@@ -647,7 +647,7 @@ export default function LoginPage() {
                       <span className="flex items-center text-sm">
                         Powered by
                         <Image
-                          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/iblai-logo-N6CYpycdPdK1RNt70a4wXbfpBsXalt.png"
+                          src="/images/design-mode/iblai-logo.png"
                           alt="IBL AI"
                           width={43}
                           height={19}
@@ -720,7 +720,7 @@ export default function LoginPage() {
                 <span className="flex items-center text-sm">
                   Powered by
                   <Image
-                    src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/iblai-logo-N6CYpycdPdK1RNt70a4wXbfpBsXalt.png"
+                    src="/images/design-mode/iblai-logo.png"
                     alt="IBL AI"
                     width={43}
                     height={19}

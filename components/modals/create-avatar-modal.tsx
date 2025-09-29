@@ -49,7 +49,7 @@ export function CreateAvatarModal({
             <div className="relative">
               <div className="w-80 h-48 bg-gradient-to-br from-blue-100 to-purple-100 rounded-xl overflow-hidden relative">
                 <Image
-                  src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/create_avatar-DTAVvmeePnxEy2y3IFq6ZHMNDMp9zZ.png"
+                  src="/images/design-mode/create_avatar.png"
                   alt="Video preview"
                   fill
                   className="object-cover"

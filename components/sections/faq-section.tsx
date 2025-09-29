@@ -189,7 +189,7 @@ export function FAQSection() {
               <span className="flex items-center">
                 Powered by
                 <Image
-                  src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/iblai-logo-N6CYpycdPdK1RNt70a4wXbfpBsXalt.png"
+                  src="/images/design-mode/iblai-logo.png"
                   alt="IBL AI"
                   width={43}
                   height={19}

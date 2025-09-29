@@ -235,7 +235,7 @@ Best regards,
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen bg-white">
+      <div className="min-h-screen bg-white mb-5">
         {/* Header Section */}
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
