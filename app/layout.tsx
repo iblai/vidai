@@ -3,15 +3,8 @@ import type { Metadata } from "next"
 
 import "./globals.css"
 import { ConditionalLayout } from "@/components/conditional-layout"
-import { Source_Serif_4 } from "next/font/google"
-
-
-// Google font loaders MUST be assigned to a const at module scope
-const sourceSerif = Source_Serif_4({
-  weight: ["200", "300", "400", "500", "600", "700", "800", "900"],
-  subsets: ["latin"],
-  variable: "--font-source-serif",
-})
+import { GeistSans } from "geist/font/sans"
+import { GeistMono } from "geist/font/mono"
 
 export const metadata: Metadata = {
   title: "vidAI",
@@ -21,8 +14,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={` ${sourceSerif.variable}`}>
-      <body className={geistSans.className}>
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+      <body className={GeistSans.className}>
         <ConditionalLayout>{children}</ConditionalLayout>
       </body>
     </html>
