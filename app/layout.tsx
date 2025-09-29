@@ -3,12 +3,8 @@ import type { Metadata } from "next"
 
 import "./globals.css"
 import { ConditionalLayout } from "@/components/conditional-layout"
-import { Geist, Source_Serif_4 } from "next/font/google"
+import { Source_Serif_4 } from "next/font/google"
 
-const geistSans = Geist({
-  subsets: ["latin"],
-  variable: "--font-geist-sans",
-})
 
 // Google font loaders MUST be assigned to a const at module scope
 const sourceSerif = Source_Serif_4({
@@ -25,7 +21,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${sourceSerif.variable}`}>
+    <html lang="en" className={` ${sourceSerif.variable}`}>
       <body className={geistSans.className}>
         <ConditionalLayout>{children}</ConditionalLayout>
       </body>
