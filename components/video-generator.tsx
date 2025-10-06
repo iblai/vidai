@@ -448,36 +448,33 @@ function VideoGeneratorContent() {
 
                 {showModelDropdown && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 sm:max-h-80 overflow-y-auto">
-                    {models.map((model) => (
-                      <div
-                        key={model.id}
-                        className={`flex items-start gap-2 sm:gap-3 p-3 sm:p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors ${
-                          selectedModel === model.id ? "bg-blue-50 border-blue-200" : ""
-                        }`}
-                        onClick={() => handleModelSelect(model.id)}
-                      >
-                        <div className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 mt-0.5">
-                          <Image
-                            src={model.icon || "/placeholder.svg"}
-                            alt={model.name}
-                            width={24}
-                            height={24}
-                            className={`w-full h-full object-contain ${
-                              model.id === "freepick" ? "bg-blue-500 rounded-full p-1" : ""
-                            }`}
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0 pr-2">
-                          <div className="font-semibold text-[#4E5460] mb-1 text-sm sm:text-base">{model.name}</div>
-                          <div className="text-xs sm:text-sm text-gray-600 leading-relaxed break-words whitespace-normal">
-                            {model.description}
+                    {models
+                      .filter((model) => model.id !== selectedModel)
+                      .map((model) => (
+                        <div
+                          key={model.id}
+                          className="flex items-start gap-2 sm:gap-3 p-3 sm:p-4 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors"
+                          onClick={() => handleModelSelect(model.id)}
+                        >
+                          <div className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 mt-0.5">
+                            <Image
+                              src={model.icon || "/placeholder.svg"}
+                              alt={model.name}
+                              width={24}
+                              height={24}
+                              className={`w-full h-full object-contain ${
+                                model.id === "freepick" ? "bg-blue-500 rounded-full p-1" : ""
+                              }`}
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0 pr-2">
+                            <div className="font-semibold text-[#4E5460] mb-1 text-sm sm:text-base">{model.name}</div>
+                            <div className="text-xs sm:text-sm text-gray-600 leading-relaxed break-words whitespace-normal">
+                              {model.description}
+                            </div>
                           </div>
                         </div>
-                        {selectedModel === model.id && (
-                          <div className="w-3 h-3 sm:w-4 sm:h-4 bg-blue-500 rounded-full flex-shrink-0 mt-1"></div>
-                        )}
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 )}
               </div>
