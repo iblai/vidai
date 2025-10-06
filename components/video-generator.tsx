@@ -15,6 +15,13 @@ import Image from "next/image"
 
 const models = [
   {
+    id: "sora2",
+    name: "Sora 2",
+    icon: "/images/models/sora.png",
+    description:
+      "OpenAI's latest video and audio generation model with realistic physics, cinematic quality, and cameo features.",
+  },
+  {
     id: "veo3",
     name: "Veo 3",
     icon: "/images/models/veo3.png",
@@ -46,7 +53,7 @@ const resolutions = ["1280×768", "1920×1080", "1024×1024", "768×1280", "1080
 
 function VideoGeneratorContent() {
   const searchParams = useSearchParams()
-  const [selectedModel, setSelectedModel] = useState("veo3")
+  const [selectedModel, setSelectedModel] = useState("sora2")
   const [videoDuration, setVideoDuration] = useState([5])
   const [prompt, setPrompt] = useState("")
   const [resolution, setResolution] = useState("1280×768")
