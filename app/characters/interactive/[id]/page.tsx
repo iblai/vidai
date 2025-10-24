@@ -47,6 +47,7 @@ export default function InteractiveAvatarPage({ params }: { params: { id: string
     }
 
     const staticCharacters = [
+      { id: "vincent-de-paul", name: "Vincent de Paul", image: "/images/characters/vincent-de-paul.jpg" },
       { id: "marcus-aurelius", name: "Marcus Aurelius", image: "/images/characters/interactive-marcus.png" },
       { id: "william-shakespeare", name: "William Shakespeare", image: "/images/characters/william-shakespeare.png" },
       { id: "thomas-aquinas", name: "Thomas Aquinas", image: "/images/characters/thomas-aquinas.png" },

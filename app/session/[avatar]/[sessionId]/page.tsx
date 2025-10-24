@@ -33,6 +33,8 @@ export default function SessionPage({ params }: { params: { avatar: string; sess
 
   const getHeyGenUrl = (characterId: string) => {
     switch (characterId) {
+      case "vincent-de-paul":
+        return "https://labs.heygen.com/guest/streaming-embed?share=eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiJlMjA2YzQzYTRkYWM0MjVkOTg4MzQ0OGEy%0D%0ANGI0Yzc3ZiIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3Yz%0D%0AL2UyMDZjNDNhNGRhYzQyNWQ5ODgzNDQ4YTI0YjRjNzdmL2Z1bGwvMi4yL3ByZXZpZXdfdGFyZ2V0%0D%0ALndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6ZmFsc2UsImtub3dsZWRnZUJhc2VJZCI6ImRl%0D%0AbW8tMSIsInVzZXJuYW1lIjoiNzAyMDc1ZjUwZGE4NDYzNDk4ZWRlZDM5NTk3NjRiMmUifQ%3D%3D&inIFrame=1"
       case "marcus-aurelius":
         return "https://labs.heygen.com/guest/streaming-embed?share=eyJxdWFsaXR5IjoiaGlnaCIsImF2YXRhck5hbWUiOiIxZWE4ODAwZDYzNGQ0OWE0YjIwN2YwYTVh%0AZGY2NzhmYyIsInByZXZpZXdJbWciOiJodHRwczovL2ZpbGVzMi5oZXlnZW4uYWkvYXZhdGFyL3Yz%0ALzFlYTg4MDBkNjM0ZDQ5YTRiMjA3ZjBhNWFkZjY3OGZjL2Z1bGwvMi4yL3ByZXZpZXdfdGFyZ2V0%0ALndlYnAiLCJuZWVkUmVtb3ZlQmFja2dyb3VuZCI6ZmFsc2UsImtub3dsZWRnZUJhc2VJZCI6ImY0%0AOTNhNjQ0MjlmZTQzNjliMTQ5ZmYxN2E2YTkwNDEwIiwidXNlcm5hbWUiOiI3MDIwNzVmNTBkYTg0%0ANjM0OThlZGVkMzk1OTc2NGIyZSJ9&inIFrame=1"
       case "william-shakespeare":
@@ -62,6 +64,7 @@ export default function SessionPage({ params }: { params: { avatar: string; sess
     }
 
     const staticCharacters = [
+      { id: "vincent-de-paul", name: "Vincent de Paul", image: "/images/characters/vincent-de-paul.jpg" },
       { id: "marcus-aurelius", name: "Marcus Aurelius", image: "/images/characters/interactive-marcus.png" },
       { id: "william-shakespeare", name: "William Shakespeare", image: "/images/characters/william-shakespeare.png" },
       { id: "thomas-aquinas", name: "Thomas Aquinas", image: "/images/characters/thomas-aquinas.png" },

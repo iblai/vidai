@@ -9,6 +9,12 @@ import CharacterSelectionModal from "@/components/modals/character-selection-mod
 
 const staticAvatars = [
   {
+    id: "vincent-de-paul",
+    name: "Vincent de Paul",
+    image: "/images/characters/vincent-de-paul.jpg",
+    badge: "New",
+  },
+  {
     id: "marcus-aurelius",
     name: "Marcus Aurelius",
     image: "/images/characters/interactive-marcus.png", // Updated thumbnail to use interactive image

@@ -13,6 +13,7 @@ const _sourceSerif_4 = V0_Font_Source_Serif_4({
   weight: ["200", "300", "400", "500", "600", "700", "800", "900"],
   variable: "--v0-font-source-serif-4",
 })
+
 const _v0_fontVariables = `${_sourceSerif_4.variable}`
 
 export const metadata: Metadata = {
