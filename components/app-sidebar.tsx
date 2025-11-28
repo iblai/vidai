@@ -16,11 +16,11 @@ import Image from "next/image"
 const sidebarItems = [
   {
     id: "characters",
-    label: "Characters",
+    label: "AI Avatars",
     icon: Users,
     children: [
-      { id: "characters-generate", label: "Generate", href: "/characters/generate" },
-      { id: "my-characters", label: "My Characters", href: "/characters/my" },
+      { id: "characters-generate", label: "Generate", href: "/ai-avatar/generate" },
+      { id: "my-characters", label: "My AI Avatars", href: "/ai-avatar/my" },
       { id: "scripts", label: "Scripts", href: "/scripts/add" },
     ],
   },
@@ -69,7 +69,7 @@ export function AppSidebar() {
 
   const getCurrentSection = (currentPath: string) => {
     if (currentPath === "/") {
-      return "characters"
+      return "ai-avatar"
     }
 
     for (const item of sidebarItems) {
@@ -89,7 +89,7 @@ export function AppSidebar() {
   }
 
   const isActiveRoute = (href: string) => {
-    if (pathname === "/" && href === "/characters/generate") {
+    if (pathname === "/" && href === "/ai-avatar/generate") {
       return true
     }
     return pathname === href

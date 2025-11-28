@@ -32,7 +32,7 @@ export function AppHeader() {
     },
     {
       id: 2,
-      message: "New character avatar available",
+      message: "New AI avatar available",
       time: "1 hour ago",
       read: false,
     },

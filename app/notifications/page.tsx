@@ -23,8 +23,8 @@ const sampleNotifications: Notification[] = [
   {
     id: "1",
     type: "character_video",
-    title: "Character Video Completed",
-    message: "Your character video with Mikel (Professional) has been successfully generated and is ready to view.",
+    title: "AI Avatar Video Completed",
+    message: "Your AI avatar video with Mikel (Professional) has been successfully generated and is ready to view.",
     timestamp: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
     isRead: false,
     characterName: "Mikel (Professional)",
@@ -42,8 +42,8 @@ const sampleNotifications: Notification[] = [
   {
     id: "3",
     type: "character_video",
-    title: "Character Video Completed",
-    message: "Your character video with Georgia has been successfully generated and is ready to view.",
+    title: "AI Avatar Video Completed",
+    message: "Your AI avatar video with Georgia has been successfully generated and is ready to view.",
     timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
     isRead: true,
     characterName: "Georgia",
@@ -61,8 +61,8 @@ const sampleNotifications: Notification[] = [
   {
     id: "5",
     type: "character_video",
-    title: "Character Video Completed",
-    message: "Your character video with Armando has been successfully generated and is ready to view.",
+    title: "AI Avatar Video Completed",
+    message: "Your AI avatar video with Armando has been successfully generated and is ready to view.",
     timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
     isRead: true,
     characterName: "Armando",
@@ -177,7 +177,7 @@ export default function NotificationsPage() {
               <p className="text-gray-600">
                 {filter === "unread"
                   ? "You're all caught up! Check back later for new updates."
-                  : "You'll see notifications about your character videos and video clips here."}
+                  : "You'll see notifications about your AI avatar videos and video clips here."}
               </p>
             </CardContent>
           </Card>

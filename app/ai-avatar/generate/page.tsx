@@ -26,7 +26,7 @@ const characterModels = [
     id: "synthesia",
     name: "Synthesia",
     icon: "/images/models/synthesia.svg",
-    description: "Enterprise-grade AI avatar platform for creating professional video content with custom characters.",
+    description: "Enterprise-grade AI avatar platform for creating professional video content with custom avatars.",
   },
 ]
 
@@ -189,8 +189,7 @@ export default function CreateAvatarPage() {
 
       // Wait a bit to show 100% completion
       setTimeout(() => {
-        // Redirect to my avatars page
-        router.push("/characters/my")
+        router.push("/ai-avatar/my")
       }, 500)
     } catch (error) {
       console.error("Upload failed:", error)
@@ -213,10 +212,10 @@ export default function CreateAvatarPage() {
   }
 
   const handleContactUs = () => {
-    const subject = "Request for Professional Character Studio Recording"
+    const subject = "Request for Professional AI Avatar Studio Recording"
     const body = `Hello ibl.ai Support Team,
 
-I would like to request professional studio assistance for creating my AI charater. I'm interested in having a high-quality character recorded in your studio facilities.
+I would like to request professional studio assistance for creating my AI charater. I'm interested in having a high-quality avatar recorded in your studio facilities.
 
 Please provide me with information about:
 - Available studio recording sessions
@@ -224,7 +223,7 @@ Please provide me with information about:
 - Scheduling availability
 - Technical requirements and preparation guidelines
 
-I'm looking forward to creating a professional character for my content.
+I'm looking forward to creating a professional AI avatar for my content.
 
 Best regards,
 [Your Name]`
@@ -239,8 +238,8 @@ Best regards,
         {/* Header Section */}
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-[#4E5460]">Generate Character</h1>{" "}
-            {/* Updated title from Create Character to Generate Character */}
+            <h1 className="text-2xl font-bold text-[#4E5460]">Generate AI Avatar</h1>{" "}
+            {/* Updated title from Create AI avatar to Generate aharacter */}
             <div className="flex items-center gap-3 px-3 py-2 border border-gray-200 rounded-lg bg-gray-50">
               <div className="w-10 h-10 flex-shrink-0">
                 <Image
@@ -253,7 +252,7 @@ Best regards,
               </div>
               <div className="w-px h-4 bg-gray-300"></div>
               <span className="text-sm text-gray-600">
-                Want to create a Studio Character?{" "}
+                Want to create a Studio AI Avatar?{" "}
                 <button onClick={handleContactUs} className="text-vidgen-primary hover:underline font-medium">
                   Contact Us
                 </button>
@@ -571,16 +570,16 @@ Best regards,
               <div className="bg-gray-50 rounded-xl border border-[#E6E6E6] p-4 w-full flex flex-col">
                 {/* Header Section - Fixed at top */}
                 <div className="text-center mb-4">
-                  <h2 className="text-2xl font-bold text-[#4E5460] mb-2">Character</h2>
+                  <h2 className="text-2xl font-bold text-[#4E5460] mb-2">AI Avatar</h2>
                   <p className="text-gray-600 text-sm">
-                    By describing imagined scenes or uploading reference images, you can obtain the desired character.
+                    By describing imagined scenes or uploading reference images, you can obtain the desired AI avatar.
                   </p>
                 </div>
                 <div className="flex-1 max-h-70 sm:max-h-80 pb-4 sm:pb-6">
                   <div className="h-full rounded-xl overflow-hidden shadow-lg">
                     <Image
                       src="/images/characters/interactive-marcus.png"
-                      alt="Interactive Marcus Aurelius Character"
+                      alt="Interactive Marcus Aurelius AI Avatar"
                       width={400}
                       height={300}
                       className="w-full h-full object-cover"

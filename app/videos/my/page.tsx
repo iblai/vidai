@@ -140,7 +140,7 @@ export default function MyVideoClipsPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-[#4E5460] mb-2">My Video Clips</h1>
         <p className="text-lg text-[#4E5460] font-medium">
-          Create stunning videos with your characters using AI-powered generation.
+          Create stunning videos with your AI avatars using AI-powered generation.
         </p>
       </div>
 

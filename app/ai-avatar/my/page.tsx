@@ -94,7 +94,7 @@ export default function MyAvatarsPage() {
   }, [])
 
   const handleCreateNewAvatar = () => {
-    window.location.href = "/characters/generate" // Updated path from /characters/create to /characters/generate
+    window.location.href = "/ai-avatar/generate" // Updated path from /characters/generate to /ai-avatar/generate
   }
 
   const handleAvatarClick = (avatar: any) => {
@@ -134,9 +134,9 @@ export default function MyAvatarsPage() {
     <div className="p-6 bg-white min-h-full">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-[#4E5460] mb-2">My Characters</h1>
+        <h1 className="text-3xl font-bold text-[#4E5460] mb-2">My AI Avatars</h1>
         <p className="text-lg text-[#4E5460] font-medium">
-          Choose a character, add a script, and get a studio quality character video in minutes.
+          Choose a AI avatar, add a script, and get a studio quality AI avatar video in minutes.
         </p>
       </div>
 
@@ -182,7 +182,7 @@ export default function MyAvatarsPage() {
               <div className="w-12 h-12 rounded-full border-2 border-gray-400 flex items-center justify-center mb-3">
                 <Plus className="w-6 h-6 text-gray-400" />
               </div>
-              <span className="text-sm font-medium text-gray-600">Generate Character</span>{" "}
+              <span className="text-sm font-medium text-gray-600">Generate AI Avatar</span>{" "}
               {/* Updated text from Create Character to Generate Character */}
             </div>
           </CardContent>

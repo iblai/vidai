@@ -57,7 +57,7 @@ export default function CharacterSelectionModal({
   const handleInteractiveChat = () => {
     if (character) {
       onClose() // Close the modal first
-      router.push(`/characters/interactive/${character.id}`)
+      router.push(`/ai-avatar/interactive/${character.id}`)
     }
   }
 
@@ -112,7 +112,7 @@ export default function CharacterSelectionModal({
                   className="w-full h-full object-cover"
                 />
               </div>
-              <h3 className="text-lg font-semibold mb-2 group-hover:text-blue-600">Create Character Video</h3>
+              <h3 className="text-lg font-semibold mb-2 group-hover:text-blue-600">Create AI Avatar Video</h3>
               <p className="text-gray-600 text-sm">Quick and easy. Create video using your own script.</p>
             </div>
 
@@ -129,7 +129,7 @@ export default function CharacterSelectionModal({
                 />
               </div>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-semibold group-hover:text-blue-600">Interactive Character</h3>
+                <h3 className="text-lg font-semibold group-hover:text-blue-600">Interactive AI Avatar</h3>
               </div>
               <p className="text-gray-600 text-sm">Talk with your avatar</p>
             </div>

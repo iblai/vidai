@@ -25,13 +25,13 @@ export function CreateAvatarModal({
       <DialogContent className="max-w-4xl p-0 gap-0">
         <DialogHeader className="p-6 pb-4">
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-2xl font-bold text-gray-600">Create Your Character</DialogTitle>
+            <DialogTitle className="text-2xl font-bold text-gray-600">Create Your AI Avatar</DialogTitle>
             <Button variant="ghost" size="icon" onClick={() => onOpenChange(false)} className="h-6 w-6 rounded-sm">
               <X className="h-4 w-4" />
             </Button>
           </div>
           <p className="text-gray-600 mt-2">
-            Use a video or photo to create your character's first look. You can add more looks of either type later.
+            Use a video or photo to create your AI avatar's first look. You can add more looks of either type later.
           </p>
         </DialogHeader>
 

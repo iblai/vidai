@@ -183,7 +183,7 @@ export default function AddScriptPage() {
                     {/* Character counter moved here, with clock icon */}
                     <div className="flex items-center gap-2 text-xs text-gray-600">
                       <Clock3 className="w-4 h-4" />
-                      <span>{`${charCount.toLocaleString()}/${charLimit.toLocaleString()} characters`}</span>
+                      <span>{`${charCount.toLocaleString()}/${charLimit.toLocaleString()} AI avatars`}</span>
                     </div>
                   </div>
                 </div>

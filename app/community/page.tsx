@@ -205,7 +205,7 @@ export default function LibraryPage() {
             }`}
             onClick={() => handleChipClick("character-video")}
           >
-            Character Video
+            AI Avatar Video
           </Button>
           <Button
             variant="outline"
@@ -239,7 +239,7 @@ export default function LibraryPage() {
                   {content.duration}
                 </div>
                 <div className="absolute bottom-2 left-2 bg-[#0376C1] text-white text-xs px-2 py-1 rounded">
-                  {content.type === "character-video" ? "Character Video" : "Video Clip"}
+                  {content.type === "character-video" ? "AI Avatar Video" : "Video Clip"}
                 </div>
               </div>
               <div className="p-3 text-left">

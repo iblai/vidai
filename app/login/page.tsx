@@ -9,12 +9,11 @@ import { Button } from "@/components/ui/button"
 import { useAuthForm } from "@/hooks/use-auth-form"
 import { useSlides } from "@/hooks/use-slides"
 import { GoogleIcon, AppleIcon, EyeIcon, EyeOffIcon } from "@/components/auth-icons/auth-icons"
-
+import { NavigationBar } from "@/components/sections/navigation-bar"
+import { ScrollToTopButton } from "@/components/sections/scroll-to-top-button"
 import { WatchSection } from "@/components/sections/watch-section"
 import { PricingSection } from "@/components/sections/pricing-section"
 import { FAQSection } from "@/components/sections/faq-section"
-import { NavigationBar } from "@/components/sections/navigation-bar"
-import { ScrollToTopButton } from "@/components/sections/scroll-to-top-button"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -179,7 +178,7 @@ export default function LoginPage() {
     {
       question: "How does vidAI work?",
       answer:
-        "vidAI uses advanced AI technology to help you create engaging video content and interactive characters. Simply upload your materials and let our AI transform them into compelling videos.",
+        "vidAI uses advanced AI technology to help you create engaging video content and interactive AI avatar. Simply upload your materials and let our AI transform them into compelling videos.",
     },
     {
       question: "What kind of files can I upload?",
@@ -187,14 +186,14 @@ export default function LoginPage() {
         "You can upload various file types including images, videos, PDFs, and text files. Our AI can process and analyze these materials to create amazing video content.",
     },
     {
-      question: "How do I create interactive characters?",
+      question: "How do I create interactive AI avatar?",
       answer:
-        "Use our character generation tools to create AI-powered avatars that can interact with your audience. Upload photos or videos to get started.",
+        "Use our AI avatar generation tools to create AI-powered avatars that can interact with your audience. Upload photos or videos to get started.",
     },
     {
       question: "Can I customize my videos?",
       answer:
-        "Yes! You have full control over your video content, including styles, effects, and character interactions. Our platform offers extensive customization options.",
+        "Yes! You have full control over your video content, including styles, effects, and AI avatar interactions. Our platform offers extensive customization options.",
     },
     {
       question: "Is vidAI free to use?",
@@ -204,46 +203,30 @@ export default function LoginPage() {
     {
       question: "How do I share my creations?",
       answer:
-        "You can easily share your videos and characters through direct links, social media, or by embedding them in your website or presentations.",
+        "You can easily share your videos and AI avatars through direct links, social media, or by embedding them in your website or presentations.",
     },
   ]
 
-  // Handle smooth scrolling to watch section
-  const scrollToWatch = () => {
-    const watchSection = document.getElementById("watch-section")
-    if (watchSection) {
-      watchSection.scrollIntoView({ behavior: "smooth" })
+  // Handle smooth scrolling to video section
+  const scrollToVideo = () => {
+    const videoSection = document.getElementById("video-section")
+    if (videoSection) {
+      videoSection.scrollIntoView({ behavior: "smooth" })
       setShowNavBar(true)
     }
   }
 
-  // Handle smooth scrolling to pricing section
-  const scrollToPricing = () => {
-    const pricingSection = document.getElementById("pricing-section")
-    if (pricingSection) {
-      pricingSection.scrollIntoView({ behavior: "smooth" })
+  // Handle smooth scrolling to videos
+  const scrollToVideos = () => {
+    const videoSection = document.getElementById("video-section")
+    if (videoSection) {
+      videoSection.scrollIntoView({ behavior: "smooth" })
       setShowNavBar(true)
     }
   }
 
-  // Handle smooth scrolling to FAQ section
-  const scrollToFAQ = () => {
-    const faqSection = document.getElementById("faq-section")
-    if (faqSection) {
-      faqSection.scrollIntoView({ behavior: "smooth" })
-      setShowNavBar(true)
-    }
-  }
-
-  // Handle scroll back to top
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" })
-    setShowNavBar(false)
-  }
-
-  // Toggle FAQ expansion
-  const toggleFAQ = (index: number) => {
-    setExpandedFAQ(expandedFAQ === index ? null : index)
   }
 
   useEffect(() => {
@@ -252,7 +235,7 @@ export default function LoginPage() {
         setCountdown((prev) => {
           if (prev <= 1) {
             clearInterval(timer)
-            router.push("/characters/generate")
+            router.push("/ai-avatar/generate")
             return 0
           }
           return prev - 1
@@ -266,28 +249,22 @@ export default function LoginPage() {
   // Handle scroll detection for navbar and active sections
   useEffect(() => {
     const handleScroll = () => {
-      const watchSection = document.getElementById("watch-section")
+      const videoSection = document.getElementById("video-section")
       const pricingSection = document.getElementById("pricing-section")
       const faqSection = document.getElementById("faq-section")
 
       // Show/hide navbar
-      if (watchSection || pricingSection || faqSection) {
-        const watchRect = watchSection?.getBoundingClientRect()
-        const pricingRect = pricingSection?.getBoundingClientRect()
-        const faqRect = faqSection?.getBoundingClientRect()
-        setShowNavBar(
-          (watchRect && watchRect.top <= 100) ||
-            (pricingRect && pricingRect.top <= 100) ||
-            (faqRect && faqRect.top <= 100),
-        )
+      if (videoSection) {
+        const videoRect = videoSection.getBoundingClientRect()
+        setShowNavBar(videoRect.top <= 100)
       }
 
       // Determine active section
       const scrollY = window.scrollY
       const windowHeight = window.innerHeight
 
-      if (watchSection && pricingSection && faqSection) {
-        const watchTop = watchSection.offsetTop - 200
+      if (videoSection && pricingSection && faqSection) {
+        const videoTop = videoSection.offsetTop - 200
         const pricingTop = pricingSection.offsetTop - 200
         const faqTop = faqSection.offsetTop - 200
 
@@ -295,8 +272,8 @@ export default function LoginPage() {
           setActiveSection("faq")
         } else if (scrollY >= pricingTop) {
           setActiveSection("pricing")
-        } else if (scrollY >= watchTop) {
-          setActiveSection("watch")
+        } else if (scrollY >= videoTop) {
+          setActiveSection("video")
         } else {
           setActiveSection("")
         }
@@ -312,13 +289,26 @@ export default function LoginPage() {
 
   return (
     <div className="w-full">
-      {/* Navigation Bar - Fixed at top when scrolled to watch section */}
+      {/* Navigation Bar - Fixed at top when scrolled to video section */}
       <NavigationBar
         showNavBar={showNavBar}
         activeSection={activeSection}
-        scrollToWatch={scrollToWatch}
-        scrollToPricing={scrollToPricing}
-        scrollToFAQ={scrollToFAQ}
+        scrollToVideo={scrollToVideo}
+        scrollToPricing={() => {
+          const pricingSection = document.getElementById("pricing-section")
+          if (pricingSection) {
+            pricingSection.scrollIntoView({ behavior: "smooth" })
+            setShowNavBar(true)
+          }
+        }}
+        scrollToFAQ={() => {
+          const faqSection = document.getElementById("faq-section")
+          if (faqSection) {
+            faqSection.scrollIntoView({ behavior: "smooth" })
+            setShowNavBar(true)
+          }
+        }}
+        scrollToVideos={scrollToVideos}
         scrollToTop={scrollToTop}
       />
 
@@ -358,7 +348,7 @@ export default function LoginPage() {
                         contentVisible.title ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2"
                       }`}
                     >
-                      Create Characters & Video Clips
+                      Create Your AI Avatar
                     </h1>
                     {contentVisible.subtitle && (
                       <p
@@ -366,7 +356,7 @@ export default function LoginPage() {
                           contentVisible.subtitle ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
                         }`}
                       >
-                        Expand your teaching style with our AI-powered tools
+                        Video agents and video clips to expand your school
                       </p>
                     )}
                   </div>
@@ -586,60 +576,13 @@ export default function LoginPage() {
                   contentVisible.footer ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
                 }`}
               >
-                {/* Divider */}
-                <div className="w-full px-2 py-3">
-                  <div className="border-t border-gray-200"></div>
-                </div>
+               
 
                 <div className="w-full px-2 pb-2">
                   <div className="flex flex-col items-center justify-center gap-2">
-                    {/* Left side - Watch, Pricing, FAQ - Centered */}
+                    {/* Right side - Video & Community - Centered */}
                     <div className="flex items-center justify-center space-x-3 sm:space-x-6 w-full">
-                      <button
-                        onClick={scrollToWatch}
-                        className={`flex items-center gap-1 sm:gap-2 transition-colors group ${
-                          activeSection === "watch" ? "text-[#38A1E5]" : "text-[#3E6BAD] hover:text-[#2E5A9D]"
-                        }`}
-                      >
-                        <Image
-                          src="/images/design-mode/video.png"
-                          alt="Watch"
-                          width={24}
-                          height={24}
-                          className={`${sizes.iconWatchSize} group-hover:scale-110 transition-transform`}
-                        />
-                        <span className={`${sizes.fontSize} font-semibold`}>Watch</span>
-                      </button>
-                      <button
-                        onClick={scrollToPricing}
-                        className={`flex items-center gap-1 sm:gap-2 transition-colors group ${
-                          activeSection === "pricing" ? "text-[#38A1E5]" : "text-[#3E6BAD] hover:text-[#2E5A9D]"
-                        }`}
-                      >
-                        <Image
-                          src="/images/design-mode/pricing.png"
-                          alt="Pricing"
-                          width={24}
-                          height={24}
-                          className={`${sizes.iconSize} group-hover:scale-110 transition-transform`}
-                        />
-                        <span className={`${sizes.fontSize} font-semibold`}>Pricing</span>
-                      </button>
-                      <button
-                        onClick={scrollToFAQ}
-                        className={`flex items-center gap-1 sm:gap-2 transition-colors group ${
-                          activeSection === "faq" ? "text-[#38A1E5]" : "text-[#3E6BAD] hover:text-[#2E5A9D]"
-                        }`}
-                      >
-                        <Image
-                          src="/images/design-mode/faq.png"
-                          alt="FAQ"
-                          width={24}
-                          height={24}
-                          className={`${sizes.iconSize} group-hover:scale-110 transition-transform`}
-                        />
-                        <span className={`${sizes.fontSize} font-semibold`}>FAQ</span>
-                      </button>
+                      
                     </div>
 
                     {/* Right side - Powered by - Only show when right column is hidden */}
@@ -747,13 +690,13 @@ export default function LoginPage() {
         </div>
       )}
 
-      {/* Watch Section - Appears after scrolling */}
+      {/* Watch Section */}
       <WatchSection />
 
-      {/* Pricing Section - Appears after scrolling */}
+      {/* Pricing Section */}
       <PricingSection />
 
-      {/* FAQ Section - Appears after scrolling */}
+      {/* FAQ Section */}
       <FAQSection />
 
       {/* Scroll to Top Button */}

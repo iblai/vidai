@@ -26,7 +26,7 @@ export default function InteractiveAvatarPage({ params }: { params: { id: string
   const [character, setCharacter] = useState<any>(null)
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false)
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState("Character")
+  const [activeTab, setActiveTab] = useState("AI Avatar")
   const [widgetPosition, setWidgetPosition] = useState("Right")
   const [customText, setCustomText] = useState("Call assistant")
   const [customImageUrl, setCustomImageUrl] = useState("")
@@ -201,7 +201,7 @@ const roomUrl = data.roomUrl;`
               ) : (
                 <>
                   <MessageCircle className="h-4 w-4 mr-2" />
-                  Talk to Character
+                  Talk to AI Avatar
                 </>
               )}
             </Button>
@@ -213,7 +213,7 @@ const roomUrl = data.roomUrl;`
       <div className="bg-white border-b border-gray-200">
         <div className="px-4 sm:px-6">
           <nav className="flex space-x-4 sm:space-x-8 overflow-x-auto">
-            {["Character", "Widget", "Limits", "Sample code"].map((tab) => (
+            {["AI Avatar", "Widget", "Limits", "Sample code"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -232,7 +232,7 @@ const roomUrl = data.roomUrl;`
 
       {/* Tab Content */}
       <div className="flex-1 p-4 sm:p-6">
-        {activeTab === "Character" && (
+        {activeTab === "AI Avatar" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             {/* Left Panel - Configuration */}
             <div className="space-y-4 sm:space-y-6">
@@ -263,7 +263,7 @@ const roomUrl = data.roomUrl;`
                   value={firstMessage}
                   onChange={(e) => setFirstMessage(e.target.value)}
                   className="min-h-[80px] resize-none"
-                  placeholder="Enter the first message your character will say..."
+                  placeholder="Enter the first message your AI avatar will say..."
                 />
               </div>
 
@@ -274,7 +274,7 @@ const roomUrl = data.roomUrl;`
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
                   className="min-h-[300px] resize-none"
-                  placeholder="Define your character's personality and behavior..."
+                  placeholder="Define your AI avatar's personality and behavior..."
                 />
               </div>
 
@@ -621,7 +621,7 @@ const roomUrl = data.roomUrl;`
             <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border border-gray-100">
               <h3 className="text-xl font-semibold mb-3 text-gray-600">Create IBL Agent</h3>
               <p className="text-gray-600 mb-4 text-sm sm:text-base">
-                Create, test, and deploy your character in the Create IBL Agent repo. Quickly get started and build your
+                Create, test, and deploy your AI avatar in the Create IBL Agent repo. Quickly get started and build your
                 AI Agent with IBL.
               </p>
               <button className="text-blue-600 hover:text-blue-700 font-medium underline">Create IBL Agent</button>

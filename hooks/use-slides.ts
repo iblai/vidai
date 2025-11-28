@@ -10,7 +10,7 @@ export function useSlides() {
   const slides = [
     {
       image: "/slide-1.png?v=2.0",
-      alt: "Generate and preview your characters",
+      alt: "Generate and preview your AI Avatars",
       width: "100%",
       maxWidth: "500px",
     },
