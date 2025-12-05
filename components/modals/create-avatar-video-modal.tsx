@@ -150,7 +150,7 @@ export function CreateAvatarVideoModal({ open, onOpenChange, avatar }: CreateAva
           <div className="p-6 pb-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-gray-600">Create AI Avatar Video</h2>
+                <h2 className="text-xl font-semibold text-gray-600">On Demand AI Avatar</h2>
               </div>
             </div>
           </div>

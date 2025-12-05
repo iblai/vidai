@@ -112,8 +112,8 @@ export default function CharacterSelectionModal({
                   className="w-full h-full object-cover"
                 />
               </div>
-              <h3 className="text-lg font-semibold mb-2 group-hover:text-blue-600">Create AI Avatar Video</h3>
-              <p className="text-gray-600 text-sm">Quick and easy. Create video using your own script.</p>
+              <h3 className="text-lg font-semibold mb-2 group-hover:text-blue-600">On Demand AI Avatar</h3>
+              <p className="text-gray-600 text-sm">Create a video using your script</p>
             </div>
 
             {/* Interactive Character */}
