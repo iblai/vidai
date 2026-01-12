@@ -3,8 +3,6 @@ import type { Metadata } from "next"
 
 import "./globals.css"
 import { ConditionalLayout } from "@/components/conditional-layout"
-import { GeistSans } from "geist/font/sans"
-import { GeistMono } from "geist/font/mono"
 
 import { Source_Serif_4 as V0_Font_Source_Serif_4 } from "next/font/google"
 
@@ -24,8 +22,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
-      <body className={GeistSans.className + " " + _v0_fontVariables}>
+    <html lang="en" className={_v0_fontVariables}>
+      <body className={_v0_fontVariables}>
         <ConditionalLayout>{children}</ConditionalLayout>
       </body>
     </html>
