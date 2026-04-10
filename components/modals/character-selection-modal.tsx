@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Pencil } from "lucide-react"
@@ -66,7 +66,7 @@ export default function CharacterSelectionModal({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl p-0 bg-white">
-        {/* Header */}
+        <DialogTitle className="sr-only">Select Character</DialogTitle>
         <div className="flex items-center justify-between p-6 border-b">
           <div className="flex items-center gap-3">
             {isEditingName ? (

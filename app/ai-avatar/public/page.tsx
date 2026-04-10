@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -117,6 +118,7 @@ const publicAvatars = [
 ]
 
 export default function PublicAvatarsPage() {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedAvatar, setSelectedAvatar] = useState<(typeof publicAvatars)[0] | null>(null)
@@ -135,8 +137,9 @@ export default function PublicAvatarsPage() {
 
   const handleInteractiveChat = () => {
     setCharacterSelectionOpen(false)
-    // TODO: Implement interactive chat functionality
-    console.log("Interactive chat with", selectedAvatar?.name)
+    if (selectedAvatar) {
+      router.push(`/ai-avatar/interactive/${selectedAvatar.id}`)
+    }
   }
 
   const filteredAvatars = publicAvatars.filter((avatar) => {

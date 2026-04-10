@@ -7,6 +7,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Slider } from "@/components/ui/slider"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Sparkles, Play, Pause, Clock3, Upload, LinkIcon, ChevronRight, Mic, FileText } from 'lucide-react'
+import { RichTextEditor } from "@iblai/iblai-js/web-containers"
+import { ConversationStarters } from "@iblai/iblai-js/web-containers/next"
 
 type TabKey = "text" | "audio" | "files"
 
@@ -24,7 +26,13 @@ export default function AddScriptPage() {
   )
 
   const charLimit = 3875
-  const charCount = script.length
+  const plainText = useMemo(() => {
+    if (typeof document === "undefined") return script
+    const tmp = document.createElement("div")
+    tmp.innerHTML = script
+    return tmp.textContent || tmp.innerText || ""
+  }, [script])
+  const charCount = plainText.length
   const remaining = useMemo(() => Math.max(0, charLimit - charCount), [charCount])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -43,7 +51,7 @@ export default function AddScriptPage() {
 
   const handlePlayPause = () => {
     if (!synth) return
-    if (!script.trim()) {
+    if (!plainText.trim()) {
       alert("Please type or generate a script first.")
       return
     }
@@ -62,7 +70,7 @@ export default function AddScriptPage() {
     }
 
     // Fresh start
-    const utterance = new SpeechSynthesisUtterance(script)
+    const utterance = new SpeechSynthesisUtterance(plainText)
     utterance.rate = speed[0] || 1
     utterance.onend = () => {
       setIsPlaying(false)
@@ -81,7 +89,7 @@ export default function AddScriptPage() {
     setSpeed(val)
     // If speaking and we change speed, restart at new rate
     if (synth && synth.speaking && utteranceRef.current) {
-      const currentText = script
+      const currentText = plainText
       synth.cancel()
       const u = new SpeechSynthesisUtterance(currentText)
       u.rate = val[0] || 1
@@ -144,31 +152,16 @@ export default function AddScriptPage() {
             <div className="px-5 pt-4">
               {activeTab === "text" && (
                 <div className="relative">
-                  {/* Textarea with extra padding to prevent overlap with embedded controls */}
-                  <div className="relative">
-                    <Textarea
-                      placeholder="Type your script"
-                      value={script}
-                      onChange={(e) => setScript(e.target.value)}
-                      className="min-h-[500px] resize-none pr-40 pb-20 rounded-t-md rounded-b-none border border-gray-300"
-                    />
+                  <RichTextEditor
+                    value={script}
+                    onChange={(val) => setScript(val)}
+                    exportFormat="html"
+                    placeholder="Type your script"
+                    minHeight="500px"
+                  />
 
-                    {/* Bottom-right: AI Help button INSIDE textarea */}
-                    <div className="absolute bottom-2 right-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => setAiOpen(true)}
-                        className="bg-[#E6EDFC] text-[#0376C1] hover:bg-[#d9e6fb]"
-                      >
-                        <Sparkles className="w-4 h-4 mr-2" />
-                        AI Help
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Play bar attached flush to textarea bottom */}
-                  <div className="-mt-px flex items-center justify-between rounded-b-md border border-gray-300 bg-gray-50 px-3 py-2">
+                  {/* Controls bar below editor */}
+                  <div className="flex items-center justify-between rounded-b-md border border-t-0 border-gray-300 bg-gray-50 px-3 py-2">
                     <div className="flex items-center gap-3">
                       <Button
                         variant="outline"
@@ -179,8 +172,16 @@ export default function AddScriptPage() {
                       >
                         {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                       </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => setAiOpen(true)}
+                        className="bg-[#E6EDFC] text-[#0376C1] hover:bg-[#d9e6fb]"
+                      >
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        AI Help
+                      </Button>
                     </div>
-                    {/* Character counter moved here, with clock icon */}
                     <div className="flex items-center gap-2 text-xs text-gray-600">
                       <Clock3 className="w-4 h-4" />
                       <span>{`${charCount.toLocaleString()}/${charLimit.toLocaleString()} AI avatars`}</span>
@@ -259,7 +260,19 @@ export default function AddScriptPage() {
               </p>
 
               <div className="mt-6">
-                <div className="h-64 rounded-lg border border-gray-200 bg-gray-50 shadow-sm" />
+                <ConversationStarters
+                  guidedPrompts={[
+                    { prompt: "Photosynthesis for Grade 7 biology class", icon: "leaf" },
+                    { prompt: "Introduction to fractions for Grade 4 math", icon: "calculator" },
+                    { prompt: "World War II overview for high school history", icon: "globe" },
+                    { prompt: "Solar system exploration for Grade 5 science", icon: "sun" },
+                    { prompt: "Creative writing workshop for middle school", icon: "pencil" },
+                  ]}
+                  onTemplateSelect={(prompt) => {
+                    setAiPrompt(prompt)
+                    setAiOpen(true)
+                  }}
+                />
               </div>
             </div>
           </CardContent>

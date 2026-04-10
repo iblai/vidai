@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Download, Share2, X } from "lucide-react"
 import { ShareModal } from "./share-modal"
@@ -43,7 +43,7 @@ export default function VideoPlayerModal({ isOpen, onClose, video }: VideoPlayer
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-4xl max-h-[90vh] p-0 bg-black">
-          {/* Header */}
+          <DialogTitle className="sr-only">Video Player</DialogTitle>
           <div className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/80 to-transparent p-4">
             <div className="flex items-center justify-between">
               <div>

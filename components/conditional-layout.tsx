@@ -7,6 +7,7 @@ import { SidebarProvider } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AppHeader } from "@/components/app-header"
 import { Footer } from "@/components/footer"
+import { IblaiProviders } from "@/providers/iblai-providers"
 
 interface ConditionalLayoutProps {
   children: React.ReactNode
@@ -15,24 +16,28 @@ interface ConditionalLayoutProps {
 export function ConditionalLayout({ children }: ConditionalLayoutProps) {
   const pathname = usePathname()
 
+  // Auth pages and SSO callback don't get providers or sidebar
   const isAuthPage = pathname === "/login" || pathname === "/"
+  const isSsoCallback = pathname?.startsWith("/sso-login")
 
-  if (isAuthPage) {
+  if (isAuthPage || isSsoCallback) {
     return <div className="min-h-screen">{children}</div>
   }
 
   return (
-    <SidebarProvider defaultOpen={true}>
-      <AppSidebar />
-      <div className="flex h-screen w-full">
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <AppHeader />
+    <IblaiProviders>
+      <SidebarProvider defaultOpen={true}>
+        <AppSidebar />
+        <div className="flex h-screen w-full">
           <div className="flex flex-1 flex-col overflow-hidden">
-            <main className="flex-1 overflow-auto bg-white">{children}</main>
-            <Footer />
+            <AppHeader />
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <main className="flex-1 overflow-auto bg-white">{children}</main>
+              <Footer />
+            </div>
           </div>
         </div>
-      </div>
-    </SidebarProvider>
+      </SidebarProvider>
+    </IblaiProviders>
   )
 }

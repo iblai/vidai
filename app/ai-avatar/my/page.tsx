@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Plus } from "lucide-react"
 import Image from "next/image"
@@ -83,6 +84,7 @@ const staticAvatars = [
 ]
 
 export default function MyAvatarsPage() {
+  const router = useRouter()
   const [selectedAvatar, setSelectedAvatar] = useState<any>(null)
   const [characterSelectionOpen, setCharacterSelectionOpen] = useState(false)
   const [videoModalOpen, setVideoModalOpen] = useState(false)
@@ -109,8 +111,9 @@ export default function MyAvatarsPage() {
 
   const handleInteractiveChat = () => {
     setCharacterSelectionOpen(false)
-    // TODO: Implement interactive chat functionality
-    console.log("Interactive chat with", selectedAvatar?.name)
+    if (selectedAvatar) {
+      router.push(`/ai-avatar/interactive/${selectedAvatar.id}`)
+    }
   }
 
   const handleNameUpdate = (newName: string) => {

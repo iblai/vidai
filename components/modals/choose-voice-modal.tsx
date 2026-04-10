@@ -1,8 +1,9 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Search, Play, Mic, ChevronDown } from "lucide-react"
@@ -98,6 +99,7 @@ interface ChooseVoiceModalProps {
 }
 
 export function ChooseVoiceModal({ open, onOpenChange, onSelectVoice }: ChooseVoiceModalProps) {
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState<"public" | "my">("my")
   const [searchQuery, setSearchQuery] = useState("")
   const [languageFilter, setLanguageFilter] = useState("English")
@@ -124,12 +126,20 @@ export function ChooseVoiceModal({ open, onOpenChange, onSelectVoice }: ChooseVo
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden p-0">
-        {/* Custom Header */}
+        <DialogTitle className="sr-only">Choose Voice</DialogTitle>
         <div className="p-6 pb-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold text-gray-600">Choose Voice</h2>
             <div className="flex items-center gap-4">
-              <Button variant="outline" size="sm" className="flex items-center gap-2 bg-transparent">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2 bg-transparent"
+                onClick={() => {
+                  onOpenChange(false)
+                  router.push("/voices/create")
+                }}
+              >
                 <Mic className="w-4 h-4" />
                 Create New Voice
               </Button>

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Sparkles, Play, Pause, Maximize, Minimize, RectangleHorizontal, RectangleVertical } from "lucide-react"
@@ -146,7 +146,7 @@ export function CreateAvatarVideoModal({ open, onOpenChange, avatar }: CreateAva
     <TooltipProvider>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden p-0">
-          {/* Custom Header */}
+          <DialogTitle className="sr-only">Create Avatar Video</DialogTitle>
           <div className="p-6 pb-4">
             <div className="flex items-center justify-between">
               <div>

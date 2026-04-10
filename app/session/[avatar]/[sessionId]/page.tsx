@@ -2,10 +2,12 @@
 
 import type React from "react"
 import { Share2, Mic, MicOff, MessageCircle, Send, X, Phone } from "lucide-react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, use } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Markdown } from "@iblai/iblai-js/web-containers"
+import { Loader } from "@iblai/iblai-js/web-containers"
 
 interface Message {
   id: string
@@ -14,14 +16,15 @@ interface Message {
   timestamp: Date
 }
 
-export default function SessionPage({ params }: { params: { avatar: string; sessionId: string } }) {
+export default function SessionPage({ params: paramsPromise }: { params: Promise<{ avatar: string; sessionId: string }> }) {
+  const params = use(paramsPromise)
   const router = useRouter()
   const [sessionState, setSessionState] = useState<"initial" | "calling" | "connected">("initial")
   const [isMuted, setIsMuted] = useState(false)
   const [isChatOpen, setIsChatOpen] = useState(false)
   const [isCallMode, setIsCallMode] = useState(true)
   const [selectedLanguage, setSelectedLanguage] = useState("English")
-  const [timeRemaining, setTimeRemaining] = useState(588) // 9:48 in seconds
+  const [timeElapsed, setTimeElapsed] = useState(0)
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState("")
   const [character, setCharacter] = useState<any>(null)
@@ -174,13 +177,13 @@ export default function SessionPage({ params }: { params: { avatar: string; sess
 
   useEffect(() => {
     let interval: NodeJS.Timeout
-    if (sessionState === "connected" && timeRemaining > 0) {
+    if (sessionState === "connected") {
       interval = setInterval(() => {
-        setTimeRemaining((prev) => prev - 1)
+        setTimeElapsed((prev) => prev + 1)
       }, 1000)
     }
     return () => clearInterval(interval)
-  }, [sessionState, timeRemaining])
+  }, [sessionState])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -265,7 +268,7 @@ export default function SessionPage({ params }: { params: { avatar: string; sess
   }
 
   if (!character) {
-    return <div className="h-screen bg-white flex items-center justify-center">Loading...</div>
+    return <div className="h-screen bg-white"><Loader /></div>
   }
 
   const isPortrait = imageDimensions.height > imageDimensions.width
@@ -312,7 +315,7 @@ export default function SessionPage({ params }: { params: { avatar: string; sess
                 {/* Time Remaining */}
                 {sessionState === "connected" && (
                   <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-medium z-20 border border-white/10">
-                    {formatTime(timeRemaining)}
+                    {formatTime(timeElapsed)}
                   </div>
                 )}
 
@@ -477,8 +480,8 @@ export default function SessionPage({ params }: { params: { avatar: string; sess
                             <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
                               {character.name[0]}
                             </div>
-                            <div className="flex-1 bg-gray-50 rounded-lg p-3">
-                              <p className="text-sm text-gray-600">{message.content}</p>
+                            <div className="flex-1 bg-gray-50 rounded-lg p-3 text-sm text-gray-600">
+                              <Markdown>{message.content}</Markdown>
                             </div>
                           </div>
                         )}

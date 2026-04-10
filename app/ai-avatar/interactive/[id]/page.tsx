@@ -1,7 +1,7 @@
 "use client"
 
 import { ArrowLeft, Pencil, Share2, Square, MessageCircle, HelpCircle, Play, Pause, Copy } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
@@ -9,7 +9,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { ChooseVoiceModal } from "@/components/modals/choose-voice-modal"
 import { ShareModal } from "@/components/modals/share-modal"
 
-export default function InteractiveAvatarPage({ params }: { params: { id: string } }) {
+export default function InteractiveAvatarPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = use(paramsPromise)
   const router = useRouter()
   const [selectedLanguage, setSelectedLanguage] = useState("English (en)")
   const [firstMessage, setFirstMessage] = useState(
@@ -486,9 +487,14 @@ const roomUrl = data.roomUrl;`
                 </div>
               </div>
 
-              <button className="text-blue-600 hover:text-blue-700 text-sm font-medium underline">
+              <a
+                href="https://docs.ibl.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-700 text-sm font-medium underline"
+              >
                 Create a custom trigger button ↗
-              </button>
+              </a>
             </div>
           </div>
         )}
@@ -624,7 +630,14 @@ const roomUrl = data.roomUrl;`
                 Create, test, and deploy your AI avatar in the Create IBL Agent repo. Quickly get started and build your
                 AI Agent with IBL.
               </p>
-              <button className="text-blue-600 hover:text-blue-700 font-medium underline">Create IBL Agent</button>
+              <a
+                href="https://platform.ibl.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-700 font-medium underline"
+              >
+                Create IBL Agent
+              </a>
             </div>
           </div>
         )}

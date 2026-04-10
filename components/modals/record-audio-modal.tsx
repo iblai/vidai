@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Mic } from "lucide-react"
 
 interface RecordAudioModalProps {
@@ -29,7 +29,7 @@ export function RecordAudioModal({ open, onOpenChange, onRecordComplete }: Recor
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
-        {/* Custom Header */}
+        <DialogTitle className="sr-only">Record Audio</DialogTitle>
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold text-gray-600">Record Audio</h2>
         </div>

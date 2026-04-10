@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { redirectToAuthSpa } from "@/lib/iblai/auth-utils"
 
 export function useAuthForm() {
   const [email, setEmail] = useState("")
@@ -10,44 +11,14 @@ export function useAuthForm() {
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [showPasswordForm, setShowPasswordForm] = useState(false)
 
-  const validateEmail = (email: string) => {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    return re.test(email)
-  }
-
   const handleContinue = () => {
-    if (!email) {
-      setEmailError("Please enter your email address")
-      return
-    }
-
-    if (!validateEmail(email)) {
-      setEmailError("Please enter a valid email address")
-      return
-    }
-
-    // Show confirmation screen
-    setShowConfirmation(true)
+    // Redirect to ibl.ai SSO login
+    redirectToAuthSpa()
   }
 
   const handlePasswordContinue = () => {
-    if (!email) {
-      setEmailError("Please enter your email address")
-      return
-    }
-
-    if (!validateEmail(email)) {
-      setEmailError("Please enter a valid email address")
-      return
-    }
-
-    if (!password) {
-      setEmailError("Please enter your password")
-      return
-    }
-
-    // Handle password login logic here
-    console.log("Login with password", { email, password })
+    // Redirect to ibl.ai SSO login
+    redirectToAuthSpa()
   }
 
   const handlePasswordLogin = () => {
