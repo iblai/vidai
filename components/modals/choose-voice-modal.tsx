@@ -1,127 +1,116 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Play, Mic, ChevronDown } from "lucide-react"
+import { Search, Play, Pause, Mic } from "lucide-react"
+import { Loader } from "@iblai/iblai-js/web-containers"
+import { useHeygenVoices } from "@/hooks/use-heygen-voices"
+import type { HeygenVoice } from "@/lib/iblai/ai-proxy"
 
-interface Voice {
+export interface ChosenVoice {
   id: string
   name: string
-  country: string
-  flag: string
-  description: string
-  tags: string[]
+  language?: string
+  gender?: string
+  preview_audio_url?: string | null
 }
-
-const publicVoices: Voice[] = [
-  {
-    id: "cerise",
-    name: "Cerise - Cheerful",
-    country: "UK",
-    flag: "🇬🇧",
-    description: "AI, E-learning, Middle-Aged, Google",
-    tags: ["cheerful", "middle-aged"],
-  },
-  {
-    id: "allison",
-    name: "Allison",
-    country: "US",
-    flag: "🇺🇸",
-    description: "Middle-Aged, Energetic, Advertisement, Elevenlabs, Marketing",
-    tags: ["energetic", "advertisement"],
-  },
-  {
-    id: "ivy",
-    name: "Ivy",
-    country: "US",
-    flag: "🇺🇸",
-    description: "Young, Confident, Social Media, Elevenlabs, Marketing",
-    tags: ["young", "confident"],
-  },
-  {
-    id: "hope",
-    name: "Hope",
-    country: "US",
-    flag: "🇺🇸",
-    description: "Young, Energetic, Social Media, Elevenlabs, Marketing",
-    tags: ["young", "energetic"],
-  },
-  {
-    id: "brittney",
-    name: "Brittney",
-    country: "US",
-    flag: "🇺🇸",
-    description: "Young, Upbeat, Social Media, Elevenlabs, Marketing",
-    tags: ["young", "upbeat"],
-  },
-  {
-    id: "monika",
-    name: "Monika Sogani",
-    country: "IN",
-    flag: "🇮🇳",
-    description: "Middle-Aged, Enticing, Advertisement, Elevenlabs, Marketing",
-    tags: ["middle-aged", "enticing"],
-  },
-  {
-    id: "juniper",
-    name: "Juniper",
-    country: "US",
-    flag: "🇺🇸",
-    description: "Middle-Aged, Friendly, Podcast, Elevenlabs, Marketing",
-    tags: ["middle-aged", "friendly"],
-  },
-  {
-    id: "cassidy",
-    name: "Cassidy",
-    country: "US",
-    flag: "🇺🇸",
-    description: "Middle-Aged, Crisp, Podcasts, Elevenlabs, Marketing",
-    tags: ["middle-aged", "crisp"],
-  },
-  {
-    id: "jessica",
-    name: "Jessica Anne Bogart",
-    country: "US",
-    flag: "🇺🇸",
-    description: "Middle-Aged, Confident, Corporate Training, Elevenlabs, Marketing",
-    tags: ["middle-aged", "confident"],
-  },
-]
 
 interface ChooseVoiceModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSelectVoice: (voice: Voice) => void
+  onSelectVoice: (voice: ChosenVoice) => void
+}
+
+function voiceToChosen(v: HeygenVoice): ChosenVoice {
+  return {
+    id: v.voice_id,
+    name: v.name,
+    language: v.language,
+    gender: v.gender,
+    preview_audio_url: v.preview_audio_url ?? null,
+  }
 }
 
 export function ChooseVoiceModal({ open, onOpenChange, onSelectVoice }: ChooseVoiceModalProps) {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<"public" | "my">("my")
+  const [activeTab, setActiveTab] = useState<"public" | "private">("public")
   const [searchQuery, setSearchQuery] = useState("")
-  const [languageFilter, setLanguageFilter] = useState("English")
-  const [accentFilter, setAccentFilter] = useState("English (Original accent)")
   const [playingVoice, setPlayingVoice] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  const handlePlayVoice = (voiceId: string) => {
-    if (playingVoice === voiceId) {
+  const { voices, loading, loadingMore, error, loadMore, hasMore } = useHeygenVoices({
+    type: activeTab,
+    pageSize: 50,
+  })
+
+  const filteredVoices = useMemo(() => {
+    if (!searchQuery.trim()) return voices
+    const q = searchQuery.toLowerCase()
+    return voices.filter(
+      (v) =>
+        v.name.toLowerCase().includes(q) ||
+        (v.language ?? "").toLowerCase().includes(q) ||
+        (v.gender ?? "").toLowerCase().includes(q),
+    )
+  }, [voices, searchQuery])
+
+  // Stop any active preview when the modal closes or the tab switches.
+  useEffect(() => {
+    if (!open && audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
       setPlayingVoice(null)
-      // Stop audio
-    } else {
-      setPlayingVoice(voiceId)
-      // Play sample audio
-      setTimeout(() => setPlayingVoice(null), 3000) // Auto stop after 3 seconds
     }
+  }, [open])
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+    setPlayingVoice(null)
+  }, [activeTab])
+
+  const handlePlayVoice = (voice: HeygenVoice) => {
+    const url = voice.preview_audio_url
+    if (playingVoice === voice.voice_id) {
+      audioRef.current?.pause()
+      audioRef.current = null
+      setPlayingVoice(null)
+      return
+    }
+    audioRef.current?.pause()
+    audioRef.current = null
+
+    if (!url) return
+    const audio = new Audio(url)
+    audioRef.current = audio
+    audio.onended = () => {
+      audioRef.current = null
+      setPlayingVoice(null)
+    }
+    audio.onerror = () => {
+      console.warn("[choose-voice] preview playback failed", url)
+      audioRef.current = null
+      setPlayingVoice(null)
+    }
+    audio.play().catch((err) => {
+      console.warn("[choose-voice] preview play rejected", err)
+      audioRef.current = null
+      setPlayingVoice(null)
+    })
+    setPlayingVoice(voice.voice_id)
   }
 
-  const filteredVoices = publicVoices.filter(
-    (voice) =>
-      voice.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      voice.description.toLowerCase().includes(searchQuery.toLowerCase()),
-  )
+  const handleSelect = (voice: HeygenVoice) => {
+    audioRef.current?.pause()
+    audioRef.current = null
+    setPlayingVoice(null)
+    onSelectVoice(voiceToChosen(voice))
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -130,32 +119,29 @@ export function ChooseVoiceModal({ open, onOpenChange, onSelectVoice }: ChooseVo
         <div className="p-6 pb-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold text-gray-600">Choose Voice</h2>
-            <div className="flex items-center gap-4">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2 bg-transparent"
-                onClick={() => {
-                  onOpenChange(false)
-                  router.push("/voices/create")
-                }}
-              >
-                <Mic className="w-4 h-4" />
-                Create New Voice
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2 bg-transparent"
+              onClick={() => {
+                onOpenChange(false)
+                router.push("/voices/create")
+              }}
+            >
+              <Mic className="w-4 h-4" />
+              Create New Voice
+            </Button>
           </div>
 
-          {/* Tabs and Search */}
           <div className="flex items-center justify-between mt-4">
             <div className="flex">
               <button
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === "my"
+                  activeTab === "private"
                     ? "text-blue-500 border-blue-500"
                     : "text-gray-500 border-transparent hover:text-gray-700"
                 }`}
-                onClick={() => setActiveTab("my")}
+                onClick={() => setActiveTab("private")}
               >
                 My Voices
               </button>
@@ -181,68 +167,87 @@ export function ChooseVoiceModal({ open, onOpenChange, onSelectVoice }: ChooseVo
               />
             </div>
           </div>
-
-          {/* Filters */}
-          <div className="flex items-center gap-4 mt-4">
-            <Select value={languageFilter} onValueChange={setLanguageFilter}>
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="English">English</SelectItem>
-                <SelectItem value="Spanish">Spanish</SelectItem>
-                <SelectItem value="French">French</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={accentFilter} onValueChange={setAccentFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="English (Original accent)">English (Original accent)</SelectItem>
-                <SelectItem value="English (US)">English (US)</SelectItem>
-                <SelectItem value="English (UK)">English (UK)</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Button variant="outline" size="sm" className="flex items-center gap-2 bg-transparent">
-              Filters
-              <ChevronDown className="w-4 h-4" />
-            </Button>
-          </div>
         </div>
 
-        {/* Voice Grid */}
         <div className="flex-1 overflow-auto p-6">
-          <div className="grid grid-cols-3 gap-4">
-            {filteredVoices.map((voice) => (
-              <div
-                key={voice.id}
-                className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 cursor-pointer transition-colors"
-                onClick={() => onSelectVoice(voice)}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{voice.flag}</span>
-                    <span className="font-medium text-gray-600">{voice.name}</span>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handlePlayVoice(voice.id)
-                    }}
+          {loading && (
+            <div className="flex items-center justify-center py-16">
+              <Loader />
+            </div>
+          )}
+
+          {!loading && error && voices.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <p className="text-red-600 mb-2 font-medium">Failed to load voices</p>
+              <p className="text-gray-500 text-sm">{error}</p>
+            </div>
+          )}
+
+          {!loading && !error && filteredVoices.length === 0 && (
+            <div className="flex items-center justify-center py-16">
+              <p className="text-gray-500 text-sm">
+                {activeTab === "private"
+                  ? "You haven't cloned any voices yet."
+                  : "No voices match your search."}
+              </p>
+            </div>
+          )}
+
+          {!loading && filteredVoices.length > 0 && (
+            <div className="grid grid-cols-3 gap-4">
+              {filteredVoices.map((voice) => {
+                const description = [voice.language, voice.gender]
+                  .filter(Boolean)
+                  .join(" • ")
+                const isPlaying = playingVoice === voice.voice_id
+                return (
+                  <div
+                    key={voice.voice_id}
+                    className="p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 cursor-pointer transition-colors"
+                    onClick={() => handleSelect(voice)}
                   >
-                    <Play className="w-4 h-4" />
-                  </Button>
-                </div>
-                <p className="text-sm text-gray-600">{voice.description}</p>
-              </div>
-            ))}
-          </div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-gray-600 truncate pr-2">
+                        {voice.name}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 flex-shrink-0"
+                        disabled={!voice.preview_audio_url}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handlePlayVoice(voice)
+                        }}
+                      >
+                        {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                      </Button>
+                    </div>
+                    {description && (
+                      <p className="text-sm text-gray-600">{description}</p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {hasMore && !loading && (
+            <div className="flex justify-center pt-6">
+              <Button
+                variant="outline"
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="min-w-[160px]"
+              >
+                {loadingMore ? "Loading..." : "Load more"}
+              </Button>
+            </div>
+          )}
+
+          {error && voices.length > 0 && (
+            <p className="text-center text-red-600 text-sm pt-4">{error}</p>
+          )}
         </div>
       </DialogContent>
     </Dialog>

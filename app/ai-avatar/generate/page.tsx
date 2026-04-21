@@ -8,6 +8,7 @@ import { Upload, Loader2, Maximize, Minimize, RotateCw, RotateCcw, ChevronDown }
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { createHeygenAvatar, uploadHeygenAsset } from "@/lib/iblai/ai-proxy"
 
 const characterModels = [
   {
@@ -36,6 +37,7 @@ export default function CreateAvatarPage() {
   const [isDragOver, setIsDragOver] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [imageMode, setImageMode] = useState<"cover" | "contain">("cover")
   const [orientation, setOrientation] = useState<"landscape" | "portrait">("landscape")
   const [selectedModel, setSelectedModel] = useState("heygen")
@@ -105,94 +107,45 @@ export default function CreateAvatarPage() {
     handleUpload(file, newPreviewUrl)
   }
 
-  const handleUpload = async (file: File, previewUrl: string) => {
+  const handleUpload = async (file: File, _previewUrl: string) => {
+    void _previewUrl
     setIsUploading(true)
     setUploadProgress(0)
+    setUploadError(null)
 
-    // Convert file to base64 for persistent storage
-    const convertToBase64 = (file: File): Promise<string> => {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result as string)
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      })
-    }
-
-    // For videos, create a thumbnail
-    const createVideoThumbnail = (videoFile: File): Promise<string> => {
-      return new Promise((resolve) => {
-        const video = document.createElement("video")
-        const canvas = document.createElement("canvas")
-        const ctx = canvas.getContext("2d")
-
-        video.onloadedmetadata = () => {
-          canvas.width = video.videoWidth
-          canvas.height = video.videoHeight
-          video.currentTime = 1 // Get frame at 1 second
-        }
-
-        video.onseeked = () => {
-          ctx?.drawImage(video, 0, 0)
-          const thumbnail = canvas.toDataURL("image/jpeg", 0.8)
-          resolve(thumbnail)
-        }
-
-        video.src = URL.createObjectURL(videoFile)
-      })
-    }
-
-    // Simulate upload progress
+    // Coarse progress: nudge toward 90% while requests are in flight,
+    // snap to 100% once the HeyGen call resolves.
     const progressInterval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 90) {
-          clearInterval(progressInterval)
-          return prev
-        }
-        return prev + Math.random() * 15
-      })
-    }, 200)
+      setUploadProgress((prev) => (prev >= 90 ? prev : prev + Math.random() * 10))
+    }, 250)
 
     try {
-      // Convert file to persistent format
-      let persistentImage: string
+      const isVideo = file.type.startsWith("video/")
+      const avatarType: "photo" | "digital_twin" = isVideo ? "digital_twin" : "photo"
 
-      if (file.type.startsWith("video/")) {
-        // For videos, create a thumbnail
-        persistentImage = await createVideoThumbnail(file)
-      } else {
-        // For images, convert to base64
-        persistentImage = await convertToBase64(file)
-      }
+      // 1. Upload the raw file to HeyGen assets (multipart) to get an asset_id.
+      const asset = await uploadHeygenAsset(file)
 
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 3000))
+      // 2. Create the avatar referencing that asset_id.
+      const name = file.name.replace(/\.[^.]+$/, "") || "Untitled"
+      const result = await createHeygenAvatar({
+        type: avatarType,
+        name,
+        file: { type: "asset_id", asset_id: asset.asset_id },
+      })
 
+      clearInterval(progressInterval)
       setUploadProgress(100)
 
-      const newCharacter = {
-        id: `character_${Date.now()}`,
-        name: "Untitled",
-        image: persistentImage, // Use persistent base64 image instead of blob URL
-        badge: "New",
-        createdAt: new Date().toISOString(),
-      }
+      console.log("[generate] avatar created:", result)
 
-      // Get existing characters from localStorage
-      const existingCharacters = JSON.parse(localStorage.getItem("newCharacters") || "[]")
-
-      // Add new character to the list
-      const updatedCharacters = [...existingCharacters, newCharacter]
-
-      // Save back to localStorage
-      localStorage.setItem("newCharacters", JSON.stringify(updatedCharacters))
-
-      // Wait a bit to show 100% completion
       setTimeout(() => {
         router.push("/ai-avatar/my")
       }, 500)
     } catch (error) {
-      console.error("Upload failed:", error)
+      clearInterval(progressInterval)
+      console.error("Avatar creation failed:", error)
+      setUploadError((error as Error)?.message ?? "Avatar creation failed")
       setIsUploading(false)
       setUploadProgress(0)
     }
@@ -424,6 +377,9 @@ Best regards,
                   )}
 
                   <p className="text-xs text-gray-500 mt-3">Supported formats: JPG, PNG, GIF, WEBP. Max size: 10MB.</p>
+                  {uploadError && (
+                    <p className="text-xs text-red-600 mt-2">{uploadError}</p>
+                  )}
                 </CardContent>
               </Card>
 

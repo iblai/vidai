@@ -1,142 +1,181 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Plus } from "lucide-react"
 import Image from "next/image"
 import VideoPlayerModal from "@/components/modals/video-player-modal"
+import { Loader } from "@iblai/iblai-js/web-containers"
+import { getHeygenVideoStatus, type HeygenVideoDetail } from "@/lib/iblai/ai-proxy"
+import {
+  listHeygenPrivateVideoResources,
+  type HeygenPrivateVideoResource,
+} from "@/lib/iblai/catalog"
+import { resolveAppTenant } from "@/lib/iblai/tenant"
 
 interface VideoClip {
+  /** Catalog item_id — stable per-platform record id. */
   id: string
+  heygenVideoId: string
   title: string
   thumbnail: string
   videoUrl: string
   duration: string
   createdAt: string
-  isGenerating?: boolean
-  progress?: number
+  isGenerating: boolean
+  status?: string
+  failureMessage?: string
+}
+
+function formatDuration(seconds?: number): string {
+  if (!seconds || Number.isNaN(seconds)) return ""
+  const s = Math.round(seconds)
+  const m = Math.floor(s / 60)
+  const r = s % 60
+  return `${m}:${String(r).padStart(2, "0")}`
+}
+
+function toVideoClip(
+  resource: HeygenPrivateVideoResource,
+  detail: HeygenVideoDetail,
+): VideoClip {
+  const status = (detail.status ?? "").toLowerCase()
+  const terminal = status === "completed" || status === "failed"
+  const resourceId = String(resource.item_id ?? resource.id ?? detail.id)
+  return {
+    id: resourceId,
+    heygenVideoId: detail.id ?? resource.data?.id ?? "",
+    title: detail.title || resource.name || "Untitled",
+    thumbnail:
+      detail.thumbnail_url ||
+      resource.data?.image_url ||
+      resource.url ||
+      resource.image ||
+      "/placeholder.svg",
+    videoUrl: detail.video_url ?? "",
+    duration: formatDuration(detail.duration),
+    createdAt: detail.created_at
+      ? new Date(detail.created_at * 1000).toLocaleDateString()
+      : "",
+    isGenerating: !terminal,
+    status: detail.status,
+    failureMessage: detail.failure_message ?? detail.failure_code,
+  }
 }
 
 export default function MyVideoClipsPage() {
   const [selectedVideo, setSelectedVideo] = useState<VideoClip | null>(null)
   const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
   const [videoClips, setVideoClips] = useState<VideoClip[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Keep a ref mirror of videoClips so the polling interval can read the
+  // current list without retriggering on every state update.
+  const videoClipsRef = useRef<VideoClip[]>([])
+  useEffect(() => {
+    videoClipsRef.current = videoClips
+  }, [videoClips])
 
   useEffect(() => {
-    const savedVideos = JSON.parse(localStorage.getItem("myVideoClips") || "[]")
-
-    // If no saved videos, add some default scene video clips
-    if (savedVideos.length === 0) {
-      const defaultSceneVideos: VideoClip[] = [
-        {
-          id: "scene-1",
-          title: "Modern Classroom Environment",
-          thumbnail: "/images/video-thumbnails/modern-classroom.png", // Updated thumbnail path to actual image
-          videoUrl: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-jCiFM7KKk5QHN1NOGuzcjBcWynmi7n.mp4",
-          duration: "0:45",
-          createdAt: "2 days ago",
-        },
-        {
-          id: "scene-2",
-          title: "University Library Study Area",
-          thumbnail: "/images/video-thumbnails/library-study-area.png", // Updated thumbnail path to actual image
-          videoUrl: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-jCiFM7KKk5QHN1NOGuzcjBcWynmi7n.mp4",
-          duration: "1:12",
-          createdAt: "3 days ago",
-        },
-        {
-          id: "scene-3",
-          title: "Science Laboratory Setup",
-          thumbnail: "/images/video-thumbnails/science-laboratory.png", // Updated thumbnail path to actual image
-          videoUrl: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-jCiFM7KKk5QHN1NOGuzcjBcWynmi7n.mp4",
-          duration: "0:38",
-          createdAt: "5 days ago",
-        },
-        {
-          id: "scene-4",
-          title: "Campus Outdoor Courtyard",
-          thumbnail: "/images/video-thumbnails/campus-courtyard.png", // Updated thumbnail path to actual image
-          videoUrl: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-jCiFM7KKk5QHN1NOGuzcjBcWynmi7n.mp4",
-          duration: "1:05",
-          createdAt: "1 week ago",
-        },
-        {
-          id: "scene-5",
-          title: "Conference Room Meeting Space",
-          thumbnail: "/images/video-thumbnails/conference-room.png", // Updated thumbnail path to actual image
-          videoUrl: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-jCiFM7KKk5QHN1NOGuzcjBcWynmi7n.mp4",
-          duration: "0:52",
-          createdAt: "1 week ago",
-        },
-        {
-          id: "scene-6",
-          title: "Student Dormitory Common Area",
-          thumbnail: "/images/video-thumbnails/dormitory-common-area.png", // Updated thumbnail path to actual image
-          videoUrl: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-jCiFM7KKk5QHN1NOGuzcjBcWynmi7n.mp4",
-          duration: "0:41",
-          createdAt: "2 weeks ago",
-        },
-      ]
-
-      localStorage.setItem("myVideoClips", JSON.stringify(defaultSceneVideos))
-      setVideoClips(defaultSceneVideos)
-    } else {
-      setVideoClips(savedVideos)
+    const platform = resolveAppTenant()
+    if (!platform) {
+      setLoading(false)
+      return
     }
 
-    const generatingVideos = savedVideos.filter((v: VideoClip) => v.isGenerating)
-    const intervals: NodeJS.Timeout[] = []
-
-    generatingVideos.forEach((video: VideoClip) => {
-      const progressInterval = setInterval(() => {
-        const currentVideos = JSON.parse(localStorage.getItem("myVideoClips") || "[]")
-        const currentVideo = currentVideos.find((v: VideoClip) => v.id === video.id)
-
-        if (!currentVideo || !currentVideo.isGenerating) {
-          clearInterval(progressInterval)
-          return
-        }
-
-        let newProgress = (currentVideo.progress || 0) + Math.random() * 10 + 5
-
-        if (newProgress >= 100) {
-          newProgress = 100
-          const updatedVideos = currentVideos.map((v: VideoClip) =>
-            v.id === video.id ? { ...v, isGenerating: false, progress: 100 } : v,
-          )
-          localStorage.setItem("myVideoClips", JSON.stringify(updatedVideos))
-          setVideoClips(updatedVideos)
-          clearInterval(progressInterval)
-        } else {
-          const updatedVideos = currentVideos.map((v: VideoClip) =>
-            v.id === video.id ? { ...v, progress: Math.round(newProgress) } : v,
-          )
-          localStorage.setItem("myVideoClips", JSON.stringify(updatedVideos))
-          setVideoClips(updatedVideos)
-        }
-      }, 1000)
-
-      intervals.push(progressInterval)
-    })
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    ;(async () => {
+      try {
+        const resources = await listHeygenPrivateVideoResources(platform)
+        const results = await Promise.all(
+          resources
+            .filter((r) => r.data?.id)
+            .map(async (r) => {
+              try {
+                const detail = await getHeygenVideoStatus(r.data.id)
+                return toVideoClip(r, detail)
+              } catch (err) {
+                console.warn(
+                  "[videos/my] status fetch failed",
+                  r.data.id,
+                  err,
+                )
+                return null
+              }
+            }),
+        )
+        if (cancelled) return
+        setVideoClips(results.filter((v): v is VideoClip => !!v))
+      } catch (err) {
+        if (cancelled) return
+        console.error("[videos/my] initial load failed", err)
+        setError((err as Error)?.message ?? "Failed to load videos")
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
 
     return () => {
-      intervals.forEach((interval) => clearInterval(interval))
+      cancelled = true
     }
   }, [])
 
+  // Poll processing videos every 10 s. Reads current list via ref so the
+  // effect itself doesn't restart when clips update.
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const inFlight = videoClipsRef.current.filter(
+        (v) => v.isGenerating && v.heygenVideoId,
+      )
+      if (inFlight.length === 0) return
+      const updates = await Promise.all(
+        inFlight.map(async (v) => {
+          try {
+            const detail = await getHeygenVideoStatus(v.heygenVideoId)
+            return toVideoClip(
+              {
+                item_id: v.id,
+                id: 0,
+                name: v.title,
+                url: "",
+                resource_type: "heygen_private_video",
+                data: { id: v.heygenVideoId, image_url: v.thumbnail },
+                image: "",
+                description: "",
+              } satisfies HeygenPrivateVideoResource,
+              detail,
+            )
+          } catch (err) {
+            console.warn("[videos/my] poll tick failed", v.heygenVideoId, err)
+            return null
+          }
+        }),
+      )
+      setVideoClips((prev) =>
+        prev.map((v) => {
+          const u = updates.find((x) => x && x.id === v.id)
+          return u ?? v
+        }),
+      )
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [])
+
   const handleCreateNewVideo = () => {
-    window.location.href = "/videos/generate" // Updated path from /videos/create to /videos/generate
+    window.location.href = "/videos/generate"
   }
 
   const handleVideoClick = (video: VideoClip) => {
-    if (video.isGenerating) return // Don't open if still generating
+    if (video.isGenerating) return
     setSelectedVideo(video)
     setVideoPlayerOpen(true)
   }
 
   return (
     <div className="p-6 bg-white min-h-full">
-      {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-[#4E5460] mb-2">My Video Clips</h1>
         <p className="text-lg text-[#4E5460] font-medium">
@@ -144,96 +183,118 @@ export default function MyVideoClipsPage() {
         </p>
       </div>
 
-      {/* Video Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-        {/* Video Clips */}
-        {videoClips.map((video) => (
+      {loading && (
+        <div className="flex items-center justify-center py-24">
+          <Loader />
+        </div>
+      )}
+
+      {!loading && error && videoClips.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <p className="text-red-600 mb-2 font-medium">Failed to load videos</p>
+          <p className="text-gray-500 text-sm">{error}</p>
+        </div>
+      )}
+
+      {!loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+          {videoClips.map((video) => (
+            <Card
+              key={video.id}
+              className={`cursor-pointer hover:shadow-lg transition-shadow duration-200 border border-[#D0E0FF] bg-[#F5F8FF] group ${
+                video.isGenerating ? "opacity-75" : ""
+              }`}
+              onClick={() => handleVideoClick(video)}
+            >
+              <CardContent className="p-0">
+                <div className="relative aspect-square rounded-lg overflow-hidden">
+                  <Image
+                    src={video.thumbnail || "/placeholder.svg"}
+                    alt={video.title}
+                    fill
+                    className="object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = "/placeholder.svg"
+                    }}
+                  />
+
+                  {video.isGenerating && (
+                    <div className="absolute inset-0 bg-black bg-opacity-60 flex flex-col items-center justify-center px-3 text-center">
+                      <span className="text-white text-sm font-medium">
+                        {video.status
+                          ? `HeyGen: ${video.status}`
+                          : "HeyGen: queued..."}
+                      </span>
+                    </div>
+                  )}
+
+                  {!video.isGenerating && video.status === "failed" && (
+                    <div className="absolute inset-0 bg-red-900 bg-opacity-70 flex flex-col items-center justify-center text-center px-3">
+                      <span className="text-white text-sm font-semibold mb-1">
+                        Failed
+                      </span>
+                      {video.failureMessage && (
+                        <span className="text-red-200 text-xs line-clamp-3">
+                          {video.failureMessage}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {!video.isGenerating && video.status !== "failed" && (
+                    <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                      <div className="flex flex-col items-center">
+                        <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center mb-3">
+                          <svg
+                            className="w-6 h-6 text-white"
+                            fill="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path d="M8 5v14l11-7z" />
+                          </svg>
+                        </div>
+                        <span className="text-white text-sm font-medium">Click to Play</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {!video.isGenerating && video.duration && (
+                    <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+                      {video.duration}
+                    </div>
+                  )}
+                </div>
+                <div className="p-3 text-left">
+                  <h3 className="font-medium text-[#4E5460] text-sm truncate">
+                    {video.title.replace(/\s*-\s*\d{1,2}\/\d{1,2}\/\d{4}.*$/, "")}
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-1">{video.createdAt}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+
           <Card
-            key={video.id}
-            className={`cursor-pointer hover:shadow-lg transition-shadow duration-200 border border-[#D0E0FF] bg-[#F5F8FF] group ${
-              video.isGenerating ? "opacity-75" : ""
-            }`}
-            onClick={() => handleVideoClick(video)}
+            className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 border-solid border-[#D0E0FF] bg-[#F5F8FF]"
+            onClick={handleCreateNewVideo}
           >
             <CardContent className="p-0">
-              <div className="relative aspect-square rounded-lg overflow-hidden">
-                <Image
-                  src={video.thumbnail || "/placeholder.svg"}
-                  alt={video.title}
-                  fill
-                  className="object-cover"
-                  onError={(e) => {
-                    console.log("[v0] Failed to load thumbnail:", video.thumbnail)
-                    e.currentTarget.src = "/placeholder.svg"
-                  }}
-                  onLoad={() => {
-                    console.log("[v0] Successfully loaded thumbnail:", video.thumbnail)
-                  }}
-                />
-
-                {/* Progress overlay for generating videos */}
-                {video.isGenerating && (
-                  <div className="absolute inset-0 bg-black bg-opacity-60 flex flex-col items-center justify-center">
-                    <span className="text-white text-sm font-medium mb-3">Generating Video...</span>
-                    <div className="w-3/4 bg-gray-700 rounded-full h-2 mb-2">
-                      <div
-                        className="bg-blue-500 h-2 rounded-full transition-all duration-500 ease-out"
-                        style={{ width: `${video.progress || 0}%` }}
-                      ></div>
-                    </div>
-                    <span className="text-blue-400 text-xs font-semibold">{video.progress || 0}%</span>
-                  </div>
-                )}
-
-                {/* Hover overlay for completed videos */}
-                {!video.isGenerating && (
-                  <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                    <div className="flex flex-col items-center">
-                      <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center mb-3">
-                        <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
-                      </div>
-                      <span className="text-white text-sm font-medium">Click to Play</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Duration badge */}
-                {!video.isGenerating && (
-                  <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
-                    {video.duration}
-                  </div>
-                )}
-              </div>
-              <div className="p-3 text-left">
-                <h3 className="font-medium text-[#4E5460] text-sm truncate">
-                  {video.title.replace(/\s*-\s*\d{1,2}\/\d{1,2}\/\d{4}.*$/, "")}
-                </h3>
-                <p className="text-xs text-gray-500 mt-1">{video.createdAt}</p>
+              <div className="aspect-square flex flex-col items-center justify-center rounded-lg">
+                <div className="w-12 h-12 rounded-full border-2 border-gray-400 flex items-center justify-center mb-3">
+                  <Plus className="w-6 h-6 text-gray-400" />
+                </div>
+                <span className="text-sm font-medium text-gray-600">Generate Video Clip</span>
               </div>
             </CardContent>
           </Card>
-        ))}
+        </div>
+      )}
 
-        {/* Create New Video Card */}
-        <Card
-          className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 border-solid border-[#D0E0FF] bg-[#F5F8FF]"
-          onClick={handleCreateNewVideo}
-        >
-          <CardContent className="p-0">
-            <div className="aspect-square flex flex-col items-center justify-center rounded-lg">
-              <div className="w-12 h-12 rounded-full border-2 border-gray-400 flex items-center justify-center mb-3">
-                <Plus className="w-6 h-6 text-gray-400" />
-              </div>
-              <span className="text-sm font-medium text-gray-600">Generate Video Clip</span>{" "}
-              {/* Updated text from Create Video Clip to Generate Video Clip */}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <VideoPlayerModal isOpen={videoPlayerOpen} onClose={() => setVideoPlayerOpen(false)} video={selectedVideo} />
+      <VideoPlayerModal
+        isOpen={videoPlayerOpen}
+        onClose={() => setVideoPlayerOpen(false)}
+        video={selectedVideo}
+      />
     </div>
   )
 }

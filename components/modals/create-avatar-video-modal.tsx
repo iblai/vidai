@@ -7,9 +7,16 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Sparkles, Play, Pause, Maximize, Minimize, RectangleHorizontal, RectangleVertical } from "lucide-react"
 import Image from "next/image"
-import { ChooseVoiceModal } from "./choose-voice-modal"
+import { ChooseVoiceModal, type ChosenVoice } from "./choose-voice-modal"
 import { RecordAudioModal } from "./record-audio-modal"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  createHeygenVideo,
+  type HeygenVideoAspectRatio,
+  type HeygenVideoResolution,
+} from "@/lib/iblai/ai-proxy"
+import { createHeygenPrivateVideoResource } from "@/lib/iblai/catalog"
+import { resolveAppTenant } from "@/lib/iblai/tenant"
 
 interface CreateAvatarVideoModalProps {
   open: boolean
@@ -18,10 +25,13 @@ interface CreateAvatarVideoModalProps {
     id: string
     name: string
     image: string
+    /** If absent, the user must pick a voice before generating a video. */
+    default_voice_id?: string
   } | null
 }
 
 const models = [
+  { id: "heygen", name: "HeyGen", icon: "/images/models/heygen.png" },
   { id: "veo3", name: "Veo 3", icon: "/images/models/veo3.png" },
   { id: "kling", name: "KlingAI", icon: "/images/models/kling.png" },
   { id: "sora", name: "Sora", icon: "/images/models/sora.png" },
@@ -30,8 +40,11 @@ const models = [
 
 export function CreateAvatarVideoModal({ open, onOpenChange, avatar }: CreateAvatarVideoModalProps) {
   const [script, setScript] = useState("")
-  const [selectedVoice, setSelectedVoice] = useState<string | null>(null)
-  const [selectedModel, setSelectedModel] = useState<string>("veo3")
+  const [selectedVoice, setSelectedVoice] = useState<{ id: string; name: string } | null>(null)
+  const [selectedModel, setSelectedModel] = useState<string>("heygen")
+  const [resolution, setResolution] = useState<HeygenVideoResolution>("720p")
+  const [generateError, setGenerateError] = useState<string | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
   const [voiceModalOpen, setVoiceModalOpen] = useState(false)
   const [recordModalOpen, setRecordModalOpen] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -43,6 +56,11 @@ export function CreateAvatarVideoModal({ open, onOpenChange, avatar }: CreateAva
   const charCount = script.length
   const estimatedSeconds = Math.ceil(charCount / 180) // Rough estimate: 180 chars per second
 
+  const voiceRequired = !avatar?.default_voice_id
+  const missingVoice = voiceRequired && !selectedVoice?.id
+  const canGenerate =
+    !!script.trim() && !isGenerating && !missingVoice
+
   const handleSurpriseMe = () => {
     const sampleScripts = [
       "Welcome to our innovative platform! Today, I'm excited to share how our cutting-edge technology can transform your business operations and drive unprecedented growth.",
@@ -53,8 +71,8 @@ export function CreateAvatarVideoModal({ open, onOpenChange, avatar }: CreateAva
     setScript(randomScript)
   }
 
-  const handleVoiceSelect = (voice: any) => {
-    setSelectedVoice(voice.name)
+  const handleVoiceSelect = (voice: ChosenVoice) => {
+    setSelectedVoice({ id: voice.id, name: voice.name })
     setVoiceModalOpen(false)
   }
 
@@ -86,58 +104,103 @@ export function CreateAvatarVideoModal({ open, onOpenChange, avatar }: CreateAva
   const setLandscapeMode = () => setOrientation("landscape")
   const setPortraitMode = () => setOrientation("portrait")
 
-  const handleGenerateVideo = () => {
+  const handleGenerateVideo = async () => {
     if (!script.trim() || !avatar) return
-
-    const newVideo = {
-      id: `video_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      title: `${avatar.name} Video - ${new Date().toLocaleDateString()}`,
-      thumbnail: avatar.image,
-      videoUrl: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/avatar_sample-y0npQ0SSHoneVkMxjpT78lfNJd6IDd.mp4", // Placeholder video
-      duration: `${estimatedSeconds}s`,
-      createdAt: new Date().toLocaleDateString(),
-      isGenerating: true,
-      progress: 0,
+    if (isGenerating) return
+    if (voiceRequired && !selectedVoice?.id) {
+      setGenerateError("This avatar has no default voice — please choose a voice.")
+      return
     }
 
-    // Add to localStorage
-    const existingVideos = JSON.parse(localStorage.getItem("myVideoClips") || "[]")
-    const updatedVideos = [newVideo, ...existingVideos]
-    localStorage.setItem("myVideoClips", JSON.stringify(updatedVideos))
+    setGenerateError(null)
+    setIsGenerating(true)
 
-    // Simulate video generation progress
-    let progress = 0
-    const progressInterval = setInterval(() => {
-      progress += Math.random() * 15 + 5 // Random progress between 5-20%
+    const aspectRatio: HeygenVideoAspectRatio =
+      orientation === "portrait" ? "9:16" : "16:9"
+    const newVideoId = `video_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const title = `${avatar.name} Video - ${new Date().toLocaleDateString()}`
 
-      if (progress >= 100) {
-        progress = 100
-        clearInterval(progressInterval)
+    try {
+      if (selectedModel === "heygen") {
+        const platform = resolveAppTenant()
+        if (!platform) throw new Error("No tenant resolved — cannot register video")
 
-        // Mark as completed
-        const videos = JSON.parse(localStorage.getItem("myVideoClips") || "[]")
-        const updatedVideos = videos.map((v: any) =>
-          v.id === newVideo.id ? { ...v, isGenerating: false, progress: 100 } : v,
-        )
-        localStorage.setItem("myVideoClips", JSON.stringify(updatedVideos))
+        const result = await createHeygenVideo({
+          type: "avatar",
+          avatar_id: avatar.id,
+          title,
+          script,
+          voice_id: selectedVoice?.id ?? null,
+          resolution,
+          aspect_ratio: aspectRatio,
+          output_format: "mp4",
+        })
 
-        // Redirect to My Video Clips
-        setTimeout(() => {
-          window.location.href = "/videos/my"
-        }, 1000)
-      } else {
-        // Update progress
-        const videos = JSON.parse(localStorage.getItem("myVideoClips") || "[]")
-        const updatedVideos = videos.map((v: any) =>
-          v.id === newVideo.id ? { ...v, progress: Math.round(progress) } : v,
-        )
-        localStorage.setItem("myVideoClips", JSON.stringify(updatedVideos))
+        await createHeygenPrivateVideoResource(platform, result.video_id, {
+          name: title,
+          image_url: avatar.image,
+        })
+
+        onOpenChange(false)
+        window.location.href = "/videos/my"
+        return
       }
-    }, 800)
 
-    // Close modal and redirect
-    onOpenChange(false)
-    window.location.href = "/videos/my"
+      // Non-HeyGen models: keep the existing simulated flow for now.
+      const newVideo = {
+        id: newVideoId,
+        title,
+        thumbnail: avatar.image,
+        videoUrl:
+          "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/avatar_sample-y0npQ0SSHoneVkMxjpT78lfNJd6IDd.mp4",
+        duration: `${estimatedSeconds}s`,
+        createdAt: new Date().toLocaleDateString(),
+        isGenerating: true,
+        progress: 0,
+        model: selectedModel,
+      }
+
+      const existingVideos = JSON.parse(localStorage.getItem("myVideoClips") || "[]")
+      localStorage.setItem(
+        "myVideoClips",
+        JSON.stringify([newVideo, ...existingVideos]),
+      )
+
+      let progress = 0
+      const progressInterval = setInterval(() => {
+        progress += Math.random() * 15 + 5
+        if (progress >= 100) {
+          progress = 100
+          clearInterval(progressInterval)
+          const videos = JSON.parse(localStorage.getItem("myVideoClips") || "[]")
+          localStorage.setItem(
+            "myVideoClips",
+            JSON.stringify(
+              videos.map((v: any) =>
+                v.id === newVideoId ? { ...v, isGenerating: false, progress: 100 } : v,
+              ),
+            ),
+          )
+        } else {
+          const videos = JSON.parse(localStorage.getItem("myVideoClips") || "[]")
+          localStorage.setItem(
+            "myVideoClips",
+            JSON.stringify(
+              videos.map((v: any) =>
+                v.id === newVideoId ? { ...v, progress: Math.round(progress) } : v,
+              ),
+            ),
+          )
+        }
+      }, 800)
+
+      onOpenChange(false)
+      window.location.href = "/videos/my"
+    } catch (err) {
+      console.error("Video generation failed:", err)
+      setGenerateError((err as Error)?.message ?? "Video generation failed")
+      setIsGenerating(false)
+    }
   }
 
   if (!avatar) return null
@@ -329,7 +392,9 @@ export function CreateAvatarVideoModal({ open, onOpenChange, avatar }: CreateAva
                       variant="outline"
                       size="sm"
                       onClick={() => setVoiceModalOpen(true)}
-                      className="flex items-center gap-1 h-8 text-xs border-0 bg-transparent hover:bg-gray-50"
+                      className={`flex items-center gap-1 h-8 text-xs border-0 bg-transparent hover:bg-gray-50 ${
+                        missingVoice ? "text-red-600" : ""
+                      }`}
                     >
                       <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
@@ -337,7 +402,7 @@ export function CreateAvatarVideoModal({ open, onOpenChange, avatar }: CreateAva
                         <line x1="12" y1="19" x2="12" y2="23" />
                         <line x1="8" y1="23" x2="16" y2="23" />
                       </svg>
-                      {selectedVoice || "Choose Voice"}
+                      {selectedVoice?.name || (voiceRequired ? "Choose Voice *" : "Choose Voice")}
                     </Button>
                     <Button
                       variant="outline"
@@ -363,24 +428,37 @@ export function CreateAvatarVideoModal({ open, onOpenChange, avatar }: CreateAva
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <Select defaultValue="720p">
+                  <Select
+                    value={resolution}
+                    onValueChange={(v) => setResolution(v as HeygenVideoResolution)}
+                  >
                     <SelectTrigger className="w-20 h-8 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="720p">720p</SelectItem>
                       <SelectItem value="1080p">1080p</SelectItem>
-                      <SelectItem value="4K">4K</SelectItem>
+                      <SelectItem value="4k">4K</SelectItem>
                     </SelectContent>
                   </Select>
                   <Button
                     className="bg-blue-500 hover:bg-blue-600 text-white px-6"
-                    disabled={!script.trim()}
+                    disabled={!canGenerate}
                     onClick={handleGenerateVideo}
                   >
-                    Generate AI Avatar Video
+                    {isGenerating ? "Generating..." : "Generate AI Avatar Video"}
                   </Button>
                 </div>
+
+                {missingVoice && !generateError && (
+                  <p className="text-sm text-amber-600">
+                    This avatar has no default voice — please choose one.
+                  </p>
+                )}
+
+                {generateError && (
+                  <p className="text-sm text-red-600">{generateError}</p>
+                )}
               </div>
             </div>
           </div>

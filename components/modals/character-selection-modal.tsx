@@ -12,6 +12,7 @@ interface Character {
   name: string
   image: string
   badge?: string
+  default_voice_id?: string
 }
 
 interface CharacterSelectionModalProps {
