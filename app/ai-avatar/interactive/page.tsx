@@ -9,7 +9,7 @@ import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { Loader } from "@iblai/iblai-js/web-containers"
 import { useHeygenAvatars } from "@/hooks/use-heygen-avatars"
-import type { HeygenAvatar } from "@/lib/iblai/ai-proxy"
+import type { HeygenAvatar } from "@/lib/heygen/rest"
 
 type InteractiveAvatar = {
   id: string

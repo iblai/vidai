@@ -5,16 +5,13 @@ import {
   listHeygenVoicesPage,
   type HeygenVoice,
   type ListHeygenVoicesOptions,
-} from "@/lib/iblai/ai-proxy";
-import { resolveAppTenant } from "@/lib/iblai/tenant";
+} from "@/lib/heygen/rest";
 
 export interface UseHeygenVoicesOptions {
   /** `public` = shared HeyGen library; `private` = user's cloned voices. */
   type: "public" | "private";
   /** Page size per upstream request, 1-100. Defaults to 50. */
   pageSize?: number;
-  /** Tenant override; defaults to resolveAppTenant() at fetch time. */
-  platform?: string;
   /** Optional extra filters forwarded to the upstream list-voices endpoint. */
   filter?: Pick<ListHeygenVoicesOptions, "engine" | "language" | "gender">;
 }
@@ -22,15 +19,11 @@ export interface UseHeygenVoicesOptions {
 /**
  * Paginated HeyGen voice loader. Fetches the first page on mount and
  * whenever `type` changes. Call `loadMore()` to append the next page
- * using the upstream `next_token` cursor.
+ * using the upstream `next_token` cursor. Talks to HeyGen REST directly
+ * using the user's OAuth token.
  */
 export function useHeygenVoices(options: UseHeygenVoicesOptions) {
-  const {
-    type,
-    pageSize = 50,
-    platform: platformOverride,
-    filter,
-  } = options;
+  const { type, pageSize = 50, filter } = options;
 
   const [voices, setVoices] = useState<HeygenVoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,11 +31,6 @@ export function useHeygenVoices(options: UseHeygenVoicesOptions) {
   const [error, setError] = useState<string | null>(null);
   const [token, setToken] = useState<string | undefined>(undefined);
   const [hasMore, setHasMore] = useState(true);
-
-  const resolvePlatform = useCallback(
-    () => platformOverride ?? resolveAppTenant(),
-    [platformOverride],
-  );
 
   // Stringify filter for stable dep comparison (filter is usually an
   // inline object literal, so identity would flicker every render).
@@ -61,7 +49,6 @@ export function useHeygenVoices(options: UseHeygenVoicesOptions) {
         const page = await listHeygenVoicesPage({
           type,
           limit: pageSize,
-          tenant: resolvePlatform(),
           ...(filter ?? {}),
         });
         if (cancelled) return;
@@ -80,7 +67,7 @@ export function useHeygenVoices(options: UseHeygenVoicesOptions) {
     return () => {
       cancelled = true;
     };
-  }, [type, pageSize, resolvePlatform, filterKey, filter]);
+  }, [type, pageSize, filterKey, filter]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -91,7 +78,6 @@ export function useHeygenVoices(options: UseHeygenVoicesOptions) {
         type,
         limit: pageSize,
         token,
-        tenant: resolvePlatform(),
         ...(filter ?? {}),
       });
       if (page.data.length > 0) {
@@ -105,7 +91,7 @@ export function useHeygenVoices(options: UseHeygenVoicesOptions) {
     } finally {
       setLoadingMore(false);
     }
-  }, [filter, hasMore, loadingMore, pageSize, resolvePlatform, token, type]);
+  }, [filter, hasMore, loadingMore, pageSize, token, type]);
 
   return { voices, loading, loadingMore, error, loadMore, hasMore };
 }

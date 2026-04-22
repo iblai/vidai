@@ -8,7 +8,13 @@ import { Upload, Loader2, Maximize, Minimize, RotateCw, RotateCcw, ChevronDown }
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { createHeygenAvatar, uploadHeygenAsset } from "@/lib/iblai/ai-proxy"
+import {
+  uploadHeygenAsset,
+  createHeygenPhotoAvatarGroup,
+  finalizeAndTrainPhotoAvatarGroup,
+} from "@/lib/heygen/rest"
+import { createHeygenPrivateAvatarResource } from "@/lib/iblai/catalog"
+import { resolveAppTenant } from "@/lib/iblai/tenant"
 
 const characterModels = [
   {
@@ -114,30 +120,50 @@ export default function CreateAvatarPage() {
     setUploadError(null)
 
     // Coarse progress: nudge toward 90% while requests are in flight,
-    // snap to 100% once the HeyGen call resolves.
+    // snap to 100% once the HeyGen calls resolve.
     const progressInterval = setInterval(() => {
       setUploadProgress((prev) => (prev >= 90 ? prev : prev + Math.random() * 10))
     }, 250)
 
     try {
-      const isVideo = file.type.startsWith("video/")
-      const avatarType: "photo" | "digital_twin" = isVideo ? "digital_twin" : "photo"
+      if (file.type.startsWith("video/")) {
+        throw new Error(
+          "Digital-twin (video) avatars aren't supported yet — please upload a photo.",
+        )
+      }
 
-      // 1. Upload the raw file to HeyGen assets (multipart) to get an asset_id.
+      const platform = resolveAppTenant()
+      if (!platform) throw new Error("No tenant resolved — cannot register avatar")
+
+      const name = file.name.replace(/\.[^.]+$/, "") || "Untitled"
+
+      // 1. Upload the raw photo → image_key.
       const asset = await uploadHeygenAsset(file)
 
-      // 2. Create the avatar referencing that asset_id.
-      const name = file.name.replace(/\.[^.]+$/, "") || "Untitled"
-      const result = await createHeygenAvatar({
-        type: avatarType,
+      // 2. Create a photo-avatar group from that image_key.
+      const group = await createHeygenPhotoAvatarGroup({
         name,
-        file: { type: "asset_id", asset_id: asset.asset_id },
+        image_key: asset.image_key,
+      })
+      if (!group.group_id) {
+        throw new Error("HeyGen did not return a group_id")
+      }
+
+      // 3. Wait for HeyGen to finish processing the photo, then kick off
+      // training. Training itself takes minutes — we don't wait for that;
+      // we just want `train` to be accepted before we register the
+      // avatar so the user sees a valid "processing" avatar in the list.
+      await finalizeAndTrainPhotoAvatarGroup(group.group_id)
+
+      // 4. Register the group in the ibl.ai catalog so it's visible to
+      // the tenant.
+      await createHeygenPrivateAvatarResource(platform, group.group_id, {
+        name,
+        image_url: group.image_url || asset.url,
       })
 
       clearInterval(progressInterval)
       setUploadProgress(100)
-
-      console.log("[generate] avatar created:", result)
 
       setTimeout(() => {
         router.push("/ai-avatar/my")

@@ -6,7 +6,7 @@ import { Plus } from "lucide-react"
 import Image from "next/image"
 import VideoPlayerModal from "@/components/modals/video-player-modal"
 import { Loader } from "@iblai/iblai-js/web-containers"
-import { getHeygenVideoStatus, type HeygenVideoDetail } from "@/lib/iblai/ai-proxy"
+import { getHeygenVideoStatus, type HeygenVideoDetail } from "@/lib/heygen/rest"
 import {
   listHeygenPrivateVideoResources,
   type HeygenPrivateVideoResource,
@@ -123,7 +123,7 @@ export default function MyVideoClipsPage() {
     }
   }, [])
 
-  // Poll processing videos every 10 s. Reads current list via ref so the
+  // Poll processing videos every 3 s. Reads current list via ref so the
   // effect itself doesn't restart when clips update.
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -160,7 +160,7 @@ export default function MyVideoClipsPage() {
           return u ?? v
         }),
       )
-    }, 10000)
+    }, 3000)
     return () => clearInterval(interval)
   }, [])
 

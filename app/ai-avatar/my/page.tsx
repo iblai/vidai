@@ -9,7 +9,7 @@ import { Loader } from "@iblai/iblai-js/web-containers"
 import { CreateAvatarVideoModal } from "@/components/modals/create-avatar-video-modal"
 import CharacterSelectionModal from "@/components/modals/character-selection-modal"
 import { useHeygenAvatars } from "@/hooks/use-heygen-avatars"
-import type { HeygenAvatar } from "@/lib/iblai/ai-proxy"
+import type { HeygenAvatar } from "@/lib/heygen/rest"
 
 type MyAvatar = {
   id: string

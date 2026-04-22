@@ -28,6 +28,8 @@ export interface CatalogResource<TData = Record<string, unknown>> {
 export interface HeygenPrivateAvatarResourceData {
   /** HeyGen avatar group id. Passed as `{group_id}` to /v3/avatars/{group_id}. */
   id: string;
+  /** Preview thumbnail URL shown before HeyGen renders its own. */
+  image_url?: string;
 }
 
 export type HeygenPrivateAvatarResource = CatalogResource<HeygenPrivateAvatarResourceData>;
@@ -217,6 +219,30 @@ export async function createCatalogResource<TData = Record<string, unknown>>(
     );
   }
   return res.json();
+}
+
+/**
+ * Register a newly-created HeyGen photo-avatar group as a platform-wide
+ * catalog resource so it shows up for every user on `/ai-avatar/my`.
+ * `data.id` is the HeyGen `group_id`; the preview thumbnail is stored
+ * inside `data.image_url` (not as a top-level `url`/`image`) per the
+ * catalog's convention for HeyGen resources.
+ */
+export async function createHeygenPrivateAvatarResource(
+  platform: string,
+  groupId: string,
+  opts: { name?: string; image_url?: string } = {},
+): Promise<HeygenPrivateAvatarResource> {
+  return createCatalogResource<HeygenPrivateAvatarResourceData>({
+    platform,
+    resource_type: "heygen_private_avatar",
+    data: {
+      id: groupId,
+      ...(opts.image_url ? { image_url: opts.image_url } : {}),
+    },
+    name: opts.name,
+    credentialsIn: "body",
+  });
 }
 
 /**

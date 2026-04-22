@@ -14,7 +14,7 @@ import {
   createHeygenVideo,
   type HeygenVideoAspectRatio,
   type HeygenVideoResolution,
-} from "@/lib/iblai/ai-proxy"
+} from "@/lib/heygen/rest"
 import { createHeygenPrivateVideoResource } from "@/lib/iblai/catalog"
 import { resolveAppTenant } from "@/lib/iblai/tenant"
 
@@ -125,18 +125,18 @@ export function CreateAvatarVideoModal({ open, onOpenChange, avatar }: CreateAva
         const platform = resolveAppTenant()
         if (!platform) throw new Error("No tenant resolved — cannot register video")
 
-        const result = await createHeygenVideo({
-          type: "avatar",
+        const voiceId = selectedVoice?.id ?? avatar.default_voice_id
+        if (!voiceId) throw new Error("Missing voice_id for HeyGen video")
+
+        const { video_id: videoId } = await createHeygenVideo({
           avatar_id: avatar.id,
-          title,
+          voice_id: voiceId,
           script,
-          voice_id: selectedVoice?.id ?? null,
-          resolution,
           aspect_ratio: aspectRatio,
-          output_format: "mp4",
+          title,
         })
 
-        await createHeygenPrivateVideoResource(platform, result.video_id, {
+        await createHeygenPrivateVideoResource(platform, videoId, {
           name: title,
           image_url: avatar.image,
         })

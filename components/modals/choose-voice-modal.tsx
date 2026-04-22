@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Search, Play, Pause, Mic } from "lucide-react"
 import { Loader } from "@iblai/iblai-js/web-containers"
 import { useHeygenVoices } from "@/hooks/use-heygen-voices"
-import type { HeygenVoice } from "@/lib/iblai/ai-proxy"
+import type { HeygenVoice } from "@/lib/heygen/rest"
 
 export interface ChosenVoice {
   id: string

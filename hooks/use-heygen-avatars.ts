@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   getHeygenAvatarGroupPage,
   type HeygenAvatar,
-} from "@/lib/iblai/ai-proxy";
+} from "@/lib/heygen/rest";
 import { listHeygenPrivateAvatarResources } from "@/lib/iblai/catalog";
 import { resolveAppTenant } from "@/lib/iblai/tenant";
 
@@ -19,20 +19,14 @@ export interface UseHeygenAvatarsOptions {
  * Loads the current user's private HeyGen avatars.
  *
  * Pipeline:
- *   1. GET /api/catalog/resources/?resource_type=heygen_private_avatar
- *      to list the user's avatar groups for the current tenant.
- *   2. For each resource, expand its `group_id` via
- *      /v3/avatars/{group_id} (through the ai-proxy), in parallel.
- *   3. Flatten all the resulting "looks" into a single `avatars` array.
- *
- * Fetching is one-shot — there is no pagination; all groups load up
- * front. `pageSize` only bounds each group's first-page request.
+ *   1. List tenant-wide catalog resources (resource_type=heygen_private_avatar)
+ *      to learn which HeyGen avatar groups belong to this platform.
+ *   2. Expand each group via HeyGen REST /v3/avatars/{group_id} using
+ *      the user's OAuth token — calls go direct, not through the proxy.
+ *   3. Flatten all looks into a single `avatars` array.
  */
 export function useHeygenAvatars(options: UseHeygenAvatarsOptions = {}) {
-  const {
-    pageSize = 50,
-    platform: platformOverride,
-  } = options;
+  const { pageSize = 50, platform: platformOverride } = options;
 
   const [avatars, setAvatars] = useState<HeygenAvatar[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,18 +49,16 @@ export function useHeygenAvatars(options: UseHeygenAvatarsOptions = {}) {
 
     const pages = await Promise.all(
       groupIds.map((gid) =>
-        getHeygenAvatarGroupPage({
-          groupId: gid,
-          limit: pageSize,
-          tenant: platform,
-        }).catch((err) => {
-          console.warn(
-            "[use-heygen-avatars] group fetch failed:",
-            gid,
-            err,
-          );
-          return { data: [] as HeygenAvatar[] };
-        }),
+        getHeygenAvatarGroupPage({ groupId: gid, limit: pageSize }).catch(
+          (err) => {
+            console.warn(
+              "[use-heygen-avatars] group fetch failed:",
+              gid,
+              err,
+            );
+            return { data: [] as HeygenAvatar[] };
+          },
+        ),
       ),
     );
     return pages.flatMap((p) => p.data);
