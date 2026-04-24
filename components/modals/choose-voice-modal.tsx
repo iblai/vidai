@@ -22,6 +22,12 @@ interface ChooseVoiceModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSelectVoice: (voice: ChosenVoice) => void
+  /**
+   * Optional upstream filter forwarded to the voice list. Use when the
+   * caller needs to restrict voices to a specific engine (e.g. `starfish`
+   * for `/v3/voices/speech`).
+   */
+  filter?: { engine?: string; language?: string; gender?: "male" | "female" }
 }
 
 function voiceToChosen(v: HeygenVoice): ChosenVoice {
@@ -34,7 +40,7 @@ function voiceToChosen(v: HeygenVoice): ChosenVoice {
   }
 }
 
-export function ChooseVoiceModal({ open, onOpenChange, onSelectVoice }: ChooseVoiceModalProps) {
+export function ChooseVoiceModal({ open, onOpenChange, onSelectVoice, filter }: ChooseVoiceModalProps) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<"public" | "private">("public")
   const [searchQuery, setSearchQuery] = useState("")
@@ -44,6 +50,7 @@ export function ChooseVoiceModal({ open, onOpenChange, onSelectVoice }: ChooseVo
   const { voices, loading, loadingMore, error, loadMore, hasMore } = useHeygenVoices({
     type: activeTab,
     pageSize: 50,
+    filter,
   })
 
   const filteredVoices = useMemo(() => {

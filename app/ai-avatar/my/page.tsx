@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus } from "lucide-react"
+import { Loader2, Plus } from "lucide-react"
 import Image from "next/image"
 import { Loader } from "@iblai/iblai-js/web-containers"
 import { CreateAvatarVideoModal } from "@/components/modals/create-avatar-video-modal"
@@ -16,6 +16,7 @@ type MyAvatar = {
   name: string
   image: string
   badge: string | null
+  status?: string
   default_voice_id?: string
 }
 
@@ -25,6 +26,7 @@ function mapHeygenMyAvatar(a: HeygenAvatar): MyAvatar {
     name: a.name || a.id,
     image: a.preview_image_url || "/placeholder.svg",
     badge: null,
+    status: a.status,
     default_voice_id: a.default_voice_id,
   }
 }
@@ -37,7 +39,7 @@ export default function MyAvatarsPage() {
   const [localAvatars, setLocalAvatars] = useState<MyAvatar[]>([])
   const [overrides, setOverrides] = useState<Record<string, Partial<MyAvatar>>>({})
 
-  const { avatars, loading, error } = useHeygenAvatars()
+  const { avatars, loading, error, refetchGroup } = useHeygenAvatars()
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -52,6 +54,28 @@ export default function MyAvatarsPage() {
     )
   }, [])
 
+  // Keep a ref mirror of avatars so the polling interval reads the
+  // current list without retriggering on every update.
+  const avatarsRef = useRef<HeygenAvatar[]>([])
+  useEffect(() => {
+    avatarsRef.current = avatars
+  }, [avatars])
+
+  // Poll any avatar group that's still training every 10 s. HeyGen
+  // flips `status` from "processing" to "completed"/"failed" when the
+  // model is ready.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const inFlight = avatarsRef.current.filter(
+        (a) => a.status === "processing",
+      )
+      for (const a of inFlight) {
+        void refetchGroup(a.id)
+      }
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [refetchGroup])
+
   const allAvatars = useMemo<MyAvatar[]>(() => {
     const merged = [...localAvatars, ...avatars.map(mapHeygenMyAvatar)]
     return merged.map((a) => (overrides[a.id] ? { ...a, ...overrides[a.id] } : a))
@@ -62,6 +86,7 @@ export default function MyAvatarsPage() {
   }
 
   const handleAvatarClick = (avatar: MyAvatar) => {
+    if (avatar.status === "processing") return
     setSelectedAvatar(avatar)
     setCharacterSelectionOpen(true)
   }
@@ -123,30 +148,61 @@ export default function MyAvatarsPage() {
       {!loading && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-            {allAvatars.map((avatar) => (
-              <Card
-                key={avatar.id}
-                className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border border-[#D0E0FF] bg-[#F5F8FF] group"
-                onClick={() => handleAvatarClick(avatar)}
-              >
-                <CardContent className="p-0">
-                  <div className="relative aspect-square rounded-lg overflow-hidden">
-                    <Image src={avatar.image || "/placeholder.svg"} alt={avatar.name} fill className="object-cover" />
-                    <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                      <span className="text-white text-sm font-medium">Click to Select</span>
+            {allAvatars.map((avatar) => {
+              const isProcessing = avatar.status === "processing"
+              const isFailed = avatar.status === "failed"
+              return (
+                <Card
+                  key={avatar.id}
+                  className={`transition-shadow duration-200 border border-[#D0E0FF] bg-[#F5F8FF] group ${
+                    isProcessing ? "opacity-75 cursor-wait" : "cursor-pointer hover:shadow-lg"
+                  }`}
+                  onClick={() => handleAvatarClick(avatar)}
+                >
+                  <CardContent className="p-0">
+                    <div className="relative aspect-square rounded-lg overflow-hidden">
+                      <Image
+                        src={avatar.image || "/placeholder.svg"}
+                        alt={avatar.name}
+                        fill
+                        className="object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = "/placeholder.svg"
+                        }}
+                      />
+
+                      {isProcessing && (
+                        <div className="absolute inset-0 bg-black bg-opacity-60 flex flex-col items-center justify-center text-center px-3">
+                          <Loader2 className="w-6 h-6 text-white animate-spin mb-2" />
+                          <span className="text-white text-sm font-medium">Training…</span>
+                        </div>
+                      )}
+
+                      {isFailed && (
+                        <div className="absolute inset-0 bg-red-900 bg-opacity-70 flex items-center justify-center text-center px-3">
+                          <span className="text-white text-sm font-semibold">Training failed</span>
+                        </div>
+                      )}
+
+                      {!isProcessing && !isFailed && (
+                        <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                          <span className="text-white text-sm font-medium">Click to Select</span>
+                        </div>
+                      )}
+
+                      {avatar.badge && !isProcessing && !isFailed && (
+                        <div className="absolute bottom-2 left-2 text-white text-xs px-2 py-1 rounded bg-[#0376C1]">
+                          {avatar.badge}
+                        </div>
+                      )}
                     </div>
-                    {avatar.badge && (
-                      <div className="absolute bottom-2 left-2 text-white text-xs px-2 py-1 rounded bg-[#0376C1]">
-                        {avatar.badge}
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-3 text-left">
-                    <h3 className="font-medium text-[#4E5460] text-sm">{avatar.name}</h3>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                    <div className="p-3 text-left">
+                      <h3 className="font-medium text-[#4E5460] text-sm">{avatar.name}</h3>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
 
             {/* Create New Avatar Card */}
             <Card

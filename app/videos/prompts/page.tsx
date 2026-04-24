@@ -1,11 +1,18 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Edit, Play, Copy, Trash2, Plus } from "lucide-react"
+import { Edit, Play, Copy, Trash2, Plus, Loader2 } from "lucide-react"
 import PromptModal from "@/components/modals/prompt-modal"
+import {
+  createVideoPromptResource,
+  deleteCatalogResource,
+  listVideoPromptResources,
+  type VideoPromptResource,
+} from "@/lib/iblai/catalog"
+import { resolveAppTenant } from "@/lib/iblai/tenant"
 
 const categories = [
   "All",
@@ -18,153 +25,31 @@ const categories = [
   "Other",
 ]
 
-const initialPrompts = [
-  // Instructional Designer
-  {
-    id: 1,
-    category: "Instructional Designer",
-    title: "Course Introduction Video",
-    description:
-      "Create a welcoming course introduction video featuring a professor in a modern classroom setting, explaining course objectives and expectations with engaging visual elements.",
-  },
-  {
-    id: 2,
-    category: "Instructional Designer",
-    title: "Interactive Learning Module",
-    description:
-      "Design a video showing students actively participating in an interactive learning session with digital tools, collaborative activities, and real-time feedback mechanisms.",
-  },
-  {
-    id: 3,
-    category: "Instructional Designer",
-    title: "Assessment Explanation Video",
-    description:
-      "Create a comprehensive video explaining different assessment methods, rubrics, and grading criteria with visual examples and clear demonstrations.",
-  },
-  {
-    id: 4,
-    category: "Instructional Designer",
-    title: "Learning Objectives Presentation",
-    description:
-      "Generate a video presenting SMART learning objectives with visual aids, examples, and alignment with course outcomes and Bloom's taxonomy.",
-  },
+interface Prompt {
+  id: number
+  title: string
+  category: string
+  description: string
+}
 
-  // AI Professors
-  {
-    id: 5,
-    category: "AI Professors",
-    title: "Lecture Delivery Video",
-    description:
-      "Create a professional lecture video with an AI professor explaining complex concepts using visual aids, diagrams, and real-world examples in an academic setting.",
-  },
-  {
-    id: 6,
-    category: "AI Professors",
-    title: "Research Methodology Explanation",
-    description:
-      "Generate a video showing research methods and techniques with step-by-step demonstrations, data analysis examples, and academic best practices.",
-  },
-  {
-    id: 7,
-    category: "AI Professors",
-    title: "Exam Review Session",
-    description:
-      "Create an engaging exam review video covering key topics, sample questions, and study strategies with clear explanations and helpful tips.",
-  },
-  {
-    id: 8,
-    category: "AI Professors",
-    title: "Academic Writing Workshop",
-    description:
-      "Design a video workshop on academic writing techniques, citation methods, and research paper structure with practical examples and exercises.",
-  },
-
-  // AI TAs
-  {
-    id: 9,
-    category: "AI TAs",
-    title: "Office Hours Session",
-    description:
-      "Create a video simulating office hours with a teaching assistant helping students with homework questions, clarifying concepts, and providing guidance.",
-  },
-  {
-    id: 10,
-    category: "AI TAs",
-    title: "Lab Demonstration",
-    description:
-      "Generate a hands-on lab demonstration video showing experimental procedures, safety protocols, and data collection techniques with clear instructions.",
-  },
-
-  // Students
-  {
-    id: 11,
-    category: "Students",
-    title: "Study Group Session",
-    description:
-      "Create a video showing students collaborating in a study group, discussing course material, solving problems together, and sharing knowledge.",
-  },
-  {
-    id: 12,
-    category: "Students",
-    title: "Presentation Skills Training",
-    description:
-      "Generate a video demonstrating effective presentation techniques, public speaking tips, and visual aid usage for student presentations.",
-  },
-
-  // AI University Roles
-  {
-    id: 13,
-    category: "AI University Roles",
-    title: "Academic Advisor Meeting",
-    description:
-      "Create a video showing an academic advisor meeting with students to discuss course selection, degree planning, and career guidance.",
-  },
-  {
-    id: 14,
-    category: "AI University Roles",
-    title: "Campus Orientation Tour",
-    description:
-      "Generate a comprehensive campus tour video highlighting key facilities, resources, and services available to new students.",
-  },
-
-  // Course Creators
-  {
-    id: 15,
-    category: "Course Creators",
-    title: "Curriculum Development Process",
-    description:
-      "Create a video explaining the course development process, including needs assessment, learning design, and content creation strategies.",
-  },
-  {
-    id: 16,
-    category: "Course Creators",
-    title: "Educational Technology Integration",
-    description:
-      "Generate a video demonstrating how to integrate various educational technologies and digital tools into course design and delivery.",
-  },
-
-  // Other
-  {
-    id: 17,
-    category: "Other",
-    title: "Campus Life Showcase",
-    description:
-      "Create an engaging video showcasing student life on campus, including dormitories, dining facilities, recreational activities, and social events.",
-  },
-  {
-    id: 18,
-    category: "Other",
-    title: "University Marketing Video",
-    description:
-      "Generate a promotional video highlighting university achievements, faculty expertise, student success stories, and unique program offerings.",
-  },
-]
+function toPrompt(r: VideoPromptResource): Prompt {
+  return {
+    id: r.id,
+    title: r.data.title || r.name,
+    category: r.data.category || "Other",
+    description: r.data.description || r.description,
+  }
+}
 
 export default function PromptsPage() {
+  const router = useRouter()
   const [selectedCategory, setSelectedCategory] = useState("All")
-  const [prompts, setPrompts] = useState(initialPrompts)
+  const [prompts, setPrompts] = useState<Prompt[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [editingPrompt, setEditingPrompt] = useState<(typeof initialPrompts)[0] | null>(null)
+  const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null)
+  const [mutating, setMutating] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     isOpen: boolean
     promptId: number | null
@@ -174,15 +59,35 @@ export default function PromptsPage() {
     promptId: null,
     promptTitle: "",
   })
-  const router = useRouter()
+
+  const loadPrompts = useCallback(async () => {
+    const platform = resolveAppTenant()
+    if (!platform) {
+      setPrompts([])
+      setLoading(false)
+      return
+    }
+    setError(null)
+    try {
+      const resources = await listVideoPromptResources(platform)
+      setPrompts(resources.map(toPrompt))
+    } catch (err) {
+      console.error("[prompts] load failed:", err)
+      setError((err as Error)?.message ?? "Failed to load prompts")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadPrompts()
+  }, [loadPrompts])
 
   const filteredPrompts =
-    selectedCategory === "All" ? prompts : prompts.filter((prompt) => prompt.category === selectedCategory)
+    selectedCategory === "All" ? prompts : prompts.filter((p) => p.category === selectedCategory)
 
-  const handleUsePrompt = (promptDescription: string) => {
-    // Redirect to videos/generate with the prompt pre-filled
-    const encodedPrompt = encodeURIComponent(promptDescription)
-    router.push(`/videos/generate?prompt=${encodedPrompt}`)
+  const handleUsePrompt = (description: string) => {
+    router.push(`/videos/generate?prompt=${encodeURIComponent(description)}`)
   }
 
   const handleAddPrompt = () => {
@@ -190,63 +95,146 @@ export default function PromptsPage() {
     setIsModalOpen(true)
   }
 
-  const handleEditPrompt = (prompt: (typeof initialPrompts)[0]) => {
+  const handleEditPrompt = (prompt: Prompt) => {
     setEditingPrompt(prompt)
     setIsModalOpen(true)
   }
 
-  const handleSavePrompt = (promptData: { title: string; category: string; description: string }) => {
-    if (editingPrompt) {
-      setPrompts(prompts.map((p) => (p.id === editingPrompt.id ? { ...p, ...promptData } : p)))
-    } else {
-      const newPrompt = {
-        id: Math.max(...prompts.map((p) => p.id)) + 1,
-        ...promptData,
+  const handleSavePrompt = async (data: { title: string; category: string; description: string }) => {
+    const platform = resolveAppTenant()
+    if (!platform) {
+      setError("No tenant resolved — please sign in again.")
+      return
+    }
+    setMutating(true)
+    setError(null)
+    try {
+      // Update = delete + recreate; the catalog has no update endpoint.
+      if (editingPrompt) {
+        await deleteCatalogResource(editingPrompt.id, { platform, resource_type: "video_prompt" })
       }
-      setPrompts([...prompts, newPrompt])
+      await createVideoPromptResource(platform, data)
+      await loadPrompts()
+      setIsModalOpen(false)
+      setEditingPrompt(null)
+    } catch (err) {
+      console.error("[prompts] save failed:", err)
+      setError((err as Error)?.message ?? "Failed to save prompt")
+    } finally {
+      setMutating(false)
     }
   }
 
-  const handleDeletePrompt = (promptId: number, promptTitle: string) => {
-    setDeleteConfirmation({
-      isOpen: true,
-      promptId,
-      promptTitle,
-    })
+  const handleDeletePrompt = (id: number, title: string) => {
+    setDeleteConfirmation({ isOpen: true, promptId: id, promptTitle: title })
   }
 
-  const confirmDelete = () => {
-    if (deleteConfirmation.promptId) {
-      setPrompts(prompts.filter((p) => p.id !== deleteConfirmation.promptId))
-    }
+  const confirmDelete = async () => {
+    const id = deleteConfirmation.promptId
     setDeleteConfirmation({ isOpen: false, promptId: null, promptTitle: "" })
+    if (!id) return
+    const platform = resolveAppTenant()
+    if (!platform) {
+      setError("No tenant resolved — please sign in again.")
+      return
+    }
+    setMutating(true)
+    setError(null)
+    try {
+      await deleteCatalogResource(id, { platform, resource_type: "video_prompt" })
+      await loadPrompts()
+    } catch (err) {
+      console.error("[prompts] delete failed:", err)
+      setError((err as Error)?.message ?? "Failed to delete prompt")
+    } finally {
+      setMutating(false)
+    }
   }
 
   const cancelDelete = () => {
     setDeleteConfirmation({ isOpen: false, promptId: null, promptTitle: "" })
   }
 
+  const handleCopyPrompt = (description: string) => {
+    navigator.clipboard.writeText(description)
+  }
+
   const groupedPrompts = filteredPrompts.reduce(
     (acc, prompt) => {
-      if (!acc[prompt.category]) {
-        acc[prompt.category] = []
-      }
+      if (!acc[prompt.category]) acc[prompt.category] = []
       acc[prompt.category].push(prompt)
       return acc
     },
-    {} as Record<string, typeof initialPrompts>,
+    {} as Record<string, Prompt[]>,
   )
 
-  const handleCopyPrompt = (promptDescription: string) => {
-    navigator.clipboard.writeText(promptDescription)
-  }
+  const renderCard = (prompt: Prompt) => (
+    <Card
+      key={prompt.id}
+      className="border border-gray-200 hover:shadow-md transition-shadow h-full flex flex-col"
+      style={{ backgroundColor: "#F5F8FF" }}
+    >
+      <CardContent className="p-4 flex-1 flex flex-col">
+        <div className="flex flex-col flex-1 gap-3">
+          <h3 className="text-lg font-semibold text-gray-700 line-clamp-1">{prompt.title}</h3>
+          <p className="text-sm text-gray-600 line-clamp-3 min-h-[3.75rem] pl-3 border-l-2 border-[#D0E0FF]">
+            {prompt.description}
+          </p>
+          <div className="mt-auto flex items-center justify-between gap-1 pt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-gray-600 hover:text-gray-600 text-xs sm:text-sm"
+              onClick={() => handleEditPrompt(prompt)}
+              disabled={mutating}
+            >
+              <Edit className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+              Edit
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-blue-600 hover:text-blue-700 text-xs sm:text-sm"
+              onClick={() => handleUsePrompt(prompt.description)}
+            >
+              <Play className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+              Use
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-gray-600 hover:text-gray-600 text-xs sm:text-sm"
+              onClick={() => handleCopyPrompt(prompt.description)}
+            >
+              <Copy className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+              Copy
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-red-600 hover:text-red-700 text-xs sm:text-sm"
+              onClick={() => handleDeletePrompt(prompt.id, prompt.title)}
+              disabled={mutating}
+            >
+              <Trash2 className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
+              Delete
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
 
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
       <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
         <h1 className="text-xl sm:text-2xl font-bold text-gray-600">Prompt Gallery</h1>
-        <Button className="bg-blue-500 hover:bg-blue-600 text-white" onClick={handleAddPrompt}>
+        <Button
+          className="bg-blue-500 hover:bg-blue-600 text-white"
+          onClick={handleAddPrompt}
+          disabled={mutating}
+        >
           <Plus className="w-4 h-4 mr-2" />
           Add Prompt
         </Button>
@@ -274,133 +262,44 @@ export default function PromptsPage() {
 
       {/* Content */}
       <div className="p-4 sm:p-6 space-y-6 sm:space-y-8">
-        {selectedCategory === "All" ? (
-          // Show all categories with sections
+        {error && (
+          <div className="p-3 rounded border border-red-200 bg-red-50 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-gray-500">
+            <Loader2 className="w-5 h-5 animate-spin mr-2" />
+            Loading prompts…
+          </div>
+        ) : filteredPrompts.length === 0 ? (
+          <div className="py-16 text-center text-gray-500">
+            No prompts yet. Click "Add Prompt" to create one.
+          </div>
+        ) : selectedCategory === "All" ? (
           Object.entries(groupedPrompts).map(([category, categoryPrompts]) => (
             <div key={category} className="space-y-4">
               <h2 className="text-lg sm:text-xl font-semibold text-gray-600">{category}</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {categoryPrompts.map((prompt) => (
-                  <Card
-                    key={prompt.id}
-                    className="border border-gray-200 hover:shadow-md transition-shadow"
-                    style={{ backgroundColor: "#F5F8FF" }}
-                  >
-                    <CardContent className="p-4">
-                      <div className="space-y-3">
-                        <h3 className="font-semibold text-gray-600">{prompt.title}</h3>
-                        <p className="text-sm text-gray-600 line-clamp-3">{prompt.description}</p>
-
-                        {/* Action Buttons */}
-                        <div className="flex items-center gap-1 sm:gap-2 pt-2 flex-wrap">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-gray-600 hover:text-gray-600 text-xs sm:text-sm"
-                            onClick={() => handleEditPrompt(prompt)}
-                          >
-                            <Edit className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                            Edit
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-blue-600 hover:text-blue-700 text-xs sm:text-sm"
-                            onClick={() => handleUsePrompt(prompt.description)}
-                          >
-                            <Play className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                            Use
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-gray-600 hover:text-gray-600 text-xs sm:text-sm"
-                            onClick={() => handleCopyPrompt(prompt.description)}
-                          >
-                            <Copy className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                            Copy
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700 text-xs sm:text-sm"
-                            onClick={() => handleDeletePrompt(prompt.id, prompt.title)}
-                          >
-                            <Trash2 className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                {categoryPrompts.map(renderCard)}
               </div>
             </div>
           ))
         ) : (
-          // Show only selected category
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredPrompts.map((prompt) => (
-              <Card
-                key={prompt.id}
-                className="border border-gray-200 hover:shadow-md transition-shadow"
-                style={{ backgroundColor: "#F5F8FF" }}
-              >
-                <CardContent className="p-4">
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-gray-600">{prompt.title}</h3>
-                    <p className="text-sm text-gray-600 line-clamp-3">{prompt.description}</p>
-
-                    {/* Action Buttons */}
-                    <div className="flex items-center gap-1 sm:gap-2 pt-2 flex-wrap">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-gray-600 hover:text-gray-600 text-xs sm:text-sm"
-                        onClick={() => handleEditPrompt(prompt)}
-                      >
-                        <Edit className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-blue-600 hover:text-blue-700 text-xs sm:text-sm"
-                        onClick={() => handleUsePrompt(prompt.description)}
-                      >
-                        <Play className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                        Use
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-gray-600 hover:text-gray-600 text-xs sm:text-sm"
-                        onClick={() => handleCopyPrompt(prompt.description)}
-                      >
-                        <Copy className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                        Copy
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600 hover:text-red-700 text-xs sm:text-sm"
-                        onClick={() => handleDeletePrompt(prompt.id, prompt.title)}
-                      >
-                        <Trash2 className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            {filteredPrompts.map(renderCard)}
           </div>
         )}
       </div>
 
       <PromptModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          if (mutating) return
+          setIsModalOpen(false)
+          setEditingPrompt(null)
+        }}
         onSave={handleSavePrompt}
         editPrompt={editingPrompt}
       />

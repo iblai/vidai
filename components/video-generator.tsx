@@ -7,13 +7,38 @@ import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Upload, Link, Sparkles, ChevronDown, Trash2, RotateCcw } from "lucide-react"
 import Image from "next/image"
+import {
+  uploadHeygenAsset,
+  createHeygenVideoClip,
+  ensureUnsignedImageUrl,
+  listHeygenVoicesPage,
+  type HeygenVideoClipAspectRatio,
+} from "@/lib/heygen/rest"
+import { createHeygenPrivateVideoResource } from "@/lib/iblai/catalog"
+import { resolveAppTenant } from "@/lib/iblai/tenant"
+import { ChooseVoiceModal, type ChosenVoice } from "@/components/modals/choose-voice-modal"
+import { Mic } from "lucide-react"
+
+function resolutionToAspectRatio(res: string): HeygenVideoClipAspectRatio {
+  const [wStr, hStr] = res.split(/[×x]/)
+  const w = Number(wStr)
+  const h = Number(hStr)
+  if (!w || !h || w === h) return "1:1"
+  return w > h ? "16:9" : "9:16"
+}
 
 const models = [
+  {
+    id: "heygen",
+    name: "HeyGen",
+    icon: "/images/models/heygen.png",
+    description:
+      "HeyGen image-to-video — animate a reference image with a motion prompt. Renders via HeyGen's /v3/videos endpoint.",
+  },
   {
     id: "sora2",
     name: "Sora 2",
@@ -53,9 +78,9 @@ const resolutions = ["1280×768", "1920×1080", "1024×1024", "768×1280", "1080
 
 function VideoGeneratorContent() {
   const searchParams = useSearchParams()
-  const [selectedModel, setSelectedModel] = useState("sora2")
-  const [videoDuration, setVideoDuration] = useState([5])
-  const [prompt, setPrompt] = useState("")
+  const [selectedModel, setSelectedModel] = useState("heygen")
+  const [script, setScript] = useState("")
+  const [motionPrompt, setMotionPrompt] = useState("")
   const [resolution, setResolution] = useState("1280×768")
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -64,8 +89,38 @@ function VideoGeneratorContent() {
   const [showUrlInput, setShowUrlInput] = useState(false)
   const [imageUrl, setImageUrl] = useState("")
   const [isLoadingUrl, setIsLoadingUrl] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generateError, setGenerateError] = useState<string | null>(null)
+  const [selectedVoice, setSelectedVoice] = useState<ChosenVoice | null>(null)
+  const [voiceModalOpen, setVoiceModalOpen] = useState(false)
+  const [isEnhancing, setIsEnhancing] = useState(false)
+  const [enhanceError, setEnhanceError] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (selectedVoice) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const page = await listHeygenVoicesPage({ type: "public", limit: 1 })
+        const first = page.data?.[0]
+        if (cancelled || !first) return
+        setSelectedVoice({
+          id: first.voice_id,
+          name: first.name,
+          language: first.language,
+          gender: first.gender,
+          preview_audio_url: first.preview_audio_url ?? null,
+        })
+      } catch (err) {
+        console.warn("[video-clip] default voice load failed:", err)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedVoice])
 
   useEffect(() => {
     const modelFromUrl = searchParams.get("model")
@@ -73,9 +128,13 @@ function VideoGeneratorContent() {
       setSelectedModel(modelFromUrl)
     }
 
-    const promptFromUrl = searchParams.get("prompt")
-    if (promptFromUrl) {
-      setPrompt(decodeURIComponent(promptFromUrl))
+    const scriptFromUrl = searchParams.get("script") ?? searchParams.get("prompt")
+    if (scriptFromUrl) {
+      setScript(decodeURIComponent(scriptFromUrl))
+    }
+    const motionFromUrl = searchParams.get("motion_prompt")
+    if (motionFromUrl) {
+      setMotionPrompt(decodeURIComponent(motionFromUrl))
     }
   }, [searchParams])
 
@@ -239,6 +298,109 @@ function VideoGeneratorContent() {
   const handleBackToUpload = () => {
     setShowUrlInput(false)
     setImageUrl("")
+  }
+
+  const canGenerate = !!selectedFile && !!script.trim() && !isGenerating
+
+  const handleEnhanceMotionPrompt = async () => {
+    const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
+    if (!apiKey) {
+      setEnhanceError("NEXT_PUBLIC_OPENAI_API_KEY is not set.")
+      return
+    }
+    setEnhanceError(null)
+    setIsEnhancing(true)
+    try {
+      const system =
+        "You rewrite motion prompts for a HeyGen image-to-video avatar. " +
+        "Return only the rewritten prompt — no preamble, quotes, or explanation. " +
+        "Focus on concrete body motion, gestures, facial expression, and camera framing. " +
+        "Keep it under 80 words."
+      const user = motionPrompt.trim()
+        ? `Rewrite and expand this motion prompt with vivid, concrete detail:\n\n${motionPrompt.trim()}`
+        : "Write a short motion prompt that gives the avatar natural conversational gestures and subtle head/shoulder movement."
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          temperature: 0.7,
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: user },
+          ],
+        }),
+      })
+      if (!res.ok) {
+        const text = await res.text().catch(() => "")
+        throw new Error(`OpenAI ${res.status}: ${text.slice(0, 200)}`)
+      }
+      const json = await res.json()
+      const out = json?.choices?.[0]?.message?.content?.trim()
+      if (!out) throw new Error("OpenAI returned no content")
+      setMotionPrompt(out)
+    } catch (err) {
+      console.error("[video-clip] enhance failed:", err)
+      setEnhanceError((err as Error)?.message ?? "Failed to enhance prompt")
+    } finally {
+      setIsEnhancing(false)
+    }
+  }
+
+  const handleGenerate = async () => {
+    if (!selectedFile) {
+      setGenerateError("Upload a reference image first.")
+      return
+    }
+    if (!script.trim()) {
+      setGenerateError("Write a script for the avatar to speak.")
+      return
+    }
+    if (selectedModel !== "heygen") {
+      setGenerateError(
+        `${models.find((m) => m.id === selectedModel)?.name ?? selectedModel} isn't wired up yet — pick HeyGen to generate.`,
+      )
+      return
+    }
+    const platform = resolveAppTenant()
+    if (!platform) {
+      setGenerateError("No tenant resolved — cannot register video.")
+      return
+    }
+
+    if (!selectedVoice?.id) {
+      setGenerateError("Choose a voice before generating.")
+      return
+    }
+
+    setGenerateError(null)
+    setIsGenerating(true)
+    try {
+      const asset = await uploadHeygenAsset(selectedFile)
+      const aspectRatio = resolutionToAspectRatio(resolution)
+      const title = `Video Clip - ${new Date().toLocaleDateString()}`
+      const { video_id: videoId } = await createHeygenVideoClip({
+        image_asset_id: asset.id,
+        motion_prompt: motionPrompt.trim() || undefined,
+        script: script.trim(),
+        voice_id: selectedVoice.id,
+        aspect_ratio: aspectRatio,
+        title,
+      })
+      const thumbnail = await ensureUnsignedImageUrl(asset.url)
+      await createHeygenPrivateVideoResource(platform, videoId, {
+        name: title,
+        image_url: thumbnail,
+      })
+      window.location.href = "/videos/my"
+    } catch (err) {
+      console.error("[video-clip] generate failed:", err)
+      setGenerateError((err as Error)?.message ?? "Failed to generate video")
+      setIsGenerating(false)
+    }
   }
 
   return (
@@ -480,48 +642,64 @@ function VideoGeneratorContent() {
               </div>
             </div>
 
-            {/* Video Duration */}
-            <div className="space-y-3 sm:space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="font-semibold text-[#4E5460] text-sm sm:text-base">Video Duration</h3>
-                <span className="text-xs sm:text-sm text-gray-600">{videoDuration[0]} seconds</span>
-              </div>
-
-              <div className="space-y-2">
-                <Slider
-                  value={videoDuration}
-                  onValueChange={setVideoDuration}
-                  max={10}
-                  min={5}
-                  step={1}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-xs text-gray-500">
-                  <span>5s</span>
-                  <span>10s</span>
-                </div>
-              </div>
+            {/* Script */}
+            <div className="space-y-2">
+              <h3 className="font-semibold text-[#4E5460] text-sm sm:text-base">
+                Script <span className="text-red-500">*</span>
+              </h3>
+              <Textarea
+                placeholder="What should the avatar say?"
+                value={script}
+                onChange={(e) => setScript(e.target.value)}
+                className="min-h-[100px] sm:min-h-[120px] resize-none text-sm"
+              />
             </div>
 
-            {/* Prompt Input with Enhance Button */}
+            {/* Motion Prompt */}
             <div className="space-y-2">
+              <h3 className="font-semibold text-[#4E5460] text-sm sm:text-base">
+                Prompt
+              </h3>
               <div className="relative">
                 <Textarea
-                  placeholder="Describe the video you want to create in detail..."
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  className="min-h-[100px] sm:min-h-[120px] resize-none pr-4 pb-10 sm:pb-12 text-sm"
+                  placeholder="Describe the motion or scene you want (optional)..."
+                  value={motionPrompt}
+                  onChange={(e) => setMotionPrompt(e.target.value)}
+                  className="min-h-[80px] sm:min-h-[100px] resize-none text-sm pb-10 sm:pb-12"
                 />
                 <Button
                   variant="ghost"
                   size="sm"
+                  onClick={handleEnhanceMotionPrompt}
+                  disabled={isEnhancing}
                   className="absolute bottom-2 left-2 h-6 sm:h-8 px-2 sm:px-3 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700"
                 >
                   <Sparkles className="w-3 h-3 mr-1" />
-                  <span className="hidden sm:inline">Enhance Prompt</span>
-                  <span className="sm:hidden">Enhance</span>
+                  <span className="hidden sm:inline">
+                    {isEnhancing ? "Enhancing..." : "Enhance Prompt"}
+                  </span>
+                  <span className="sm:hidden">
+                    {isEnhancing ? "..." : "Enhance"}
+                  </span>
                 </Button>
               </div>
+              {enhanceError && (
+                <p className="text-xs text-red-600">{enhanceError}</p>
+              )}
+            </div>
+
+            {/* Voice Selector */}
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                onClick={() => setVoiceModalOpen(true)}
+                className="w-full justify-start h-auto py-2.5 px-3 text-sm"
+              >
+                <Mic className="w-4 h-4 mr-2 text-gray-500" />
+                {selectedVoice?.name
+                  ? `Voice: ${selectedVoice.name}`
+                  : "Choose Voice"}
+              </Button>
             </div>
 
             {/* Resolution Selector */}
@@ -541,10 +719,27 @@ function VideoGeneratorContent() {
             </div>
 
             {/* Generate Button */}
-            <Button className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2.5 sm:py-3 text-sm sm:text-base">
+            <Button
+              onClick={handleGenerate}
+              disabled={!canGenerate}
+              className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2.5 sm:py-3 text-sm sm:text-base"
+            >
               <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />
-              Generate
+              {isGenerating ? "Generating..." : "Generate"}
             </Button>
+
+            {generateError && (
+              <p className="text-sm text-red-600">{generateError}</p>
+            )}
+
+            <ChooseVoiceModal
+              open={voiceModalOpen}
+              onOpenChange={setVoiceModalOpen}
+              onSelectVoice={(v) => {
+                setSelectedVoice(v)
+                setVoiceModalOpen(false)
+              }}
+            />
           </div>
         </div>
       </div>

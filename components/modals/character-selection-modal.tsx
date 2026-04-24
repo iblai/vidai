@@ -6,6 +6,10 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Pencil } from "lucide-react"
+import { listHeygenInteractiveAvatars } from "@/lib/heygen/rest"
+
+const HEYGEN_INTERACTIVE_SETUP_URL =
+  "https://labs.heygen.com/interactive-avatar"
 
 interface Character {
   id: string
@@ -55,11 +59,46 @@ export default function CharacterSelectionModal({
     setEditedName("")
   }
 
-  const handleInteractiveChat = () => {
-    if (character) {
-      onClose() // Close the modal first
-      router.push(`/ai-avatar/interactive/${character.id}`)
+  const [checkingInteractive, setCheckingInteractive] = useState(false)
+  /** When true, the avatar isn't configured as interactive on HeyGen;
+   *  we show a confirmation dialog before opening the external setup
+   *  URL so the user can cancel. */
+  const [showSetupPrompt, setShowSetupPrompt] = useState(false)
+
+  const handleInteractiveChat = async () => {
+    if (!character || checkingInteractive) return
+    setCheckingInteractive(true)
+    try {
+      // Only avatars registered as interactive at HeyGen's side can be
+      // driven by the streaming API. Anything else (static slug
+      // characters, plain photo/digital-twin looks) must be configured
+      // at labs.heygen.com/interactive-avatar first.
+      const interactive = await listHeygenInteractiveAvatars()
+      const isInteractive = interactive.some(
+        (a) => a.status === "ACTIVE" && a.avatar_id === character.id,
+      )
+      if (isInteractive) {
+        onClose()
+        router.push(`/ai-avatar/interactive/${character.id}`)
+      } else {
+        setShowSetupPrompt(true)
+      }
+    } catch (err) {
+      console.error("[character-selection] interactive check failed:", err)
+      setShowSetupPrompt(true)
+    } finally {
+      setCheckingInteractive(false)
     }
+  }
+
+  const handleConfirmOpenSetup = () => {
+    setShowSetupPrompt(false)
+    onClose()
+    window.open(HEYGEN_INTERACTIVE_SETUP_URL, "_blank", "noopener")
+  }
+
+  const handleCancelSetup = () => {
+    setShowSetupPrompt(false)
   }
 
   if (!character) return null
@@ -137,6 +176,30 @@ export default function CharacterSelectionModal({
           </div>
         </div>
       </DialogContent>
+
+      <Dialog open={showSetupPrompt} onOpenChange={setShowSetupPrompt}>
+        <DialogContent className="max-w-md bg-white">
+          <DialogTitle className="text-lg font-semibold text-gray-800">
+            Set up interactive avatar
+          </DialogTitle>
+          <p className="text-sm text-gray-600 mt-2">
+            <strong>{character.name}</strong> isn't configured as an
+            interactive avatar on HeyGen yet. Open labs.heygen.com to set
+            it up?
+          </p>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={handleCancelSetup}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-blue-500 hover:bg-blue-600 text-white"
+              onClick={handleConfirmOpenSetup}
+            >
+              Open HeyGen
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   )
 }

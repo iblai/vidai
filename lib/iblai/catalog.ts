@@ -44,6 +44,26 @@ export interface HeygenPrivateVideoResourceData {
 
 export type HeygenPrivateVideoResource = CatalogResource<HeygenPrivateVideoResourceData>;
 
+/** Payload shape for `resource_type === "heygen_private_voice"`. */
+export interface HeygenPrivateVoiceResourceData {
+  /** HeyGen voice id. Matches the `voice_id` used by `/v3/voices` + video endpoints. */
+  id: string;
+  language?: string;
+  gender?: string;
+  preview_audio_url?: string;
+}
+
+export type HeygenPrivateVoiceResource = CatalogResource<HeygenPrivateVoiceResourceData>;
+
+/** Payload shape for `resource_type === "video_prompt"`. */
+export interface VideoPromptResourceData {
+  title: string;
+  category: string;
+  description: string;
+}
+
+export type VideoPromptResource = CatalogResource<VideoPromptResourceData>;
+
 function getDmToken(): string {
   if (typeof window === "undefined") return "";
   return localStorage.getItem("dm_token") ?? "";
@@ -251,6 +271,49 @@ export async function createHeygenPrivateAvatarResource(
  * thumbnail is stored inside `data.image_url` (not as a top-level
  * `url`/`image`) per the catalog's video-resource convention.
  */
+/**
+ * Platform-wide HeyGen private voice resources (cloned voices).
+ */
+export async function listHeygenPrivateVoiceResources(
+  platform: string,
+): Promise<HeygenPrivateVoiceResource[]> {
+  if (!platform) return [];
+  return listCatalogResources<HeygenPrivateVoiceResourceData>({
+    platform,
+    resource_type: "heygen_private_voice",
+  });
+}
+
+/**
+ * Register a newly-cloned HeyGen voice in the catalog so every user on
+ * the tenant can find it without paging through HeyGen's private list.
+ */
+export async function createHeygenPrivateVoiceResource(
+  platform: string,
+  voiceId: string,
+  opts: {
+    name?: string;
+    language?: string;
+    gender?: string;
+    preview_audio_url?: string;
+  } = {},
+): Promise<HeygenPrivateVoiceResource> {
+  return createCatalogResource<HeygenPrivateVoiceResourceData>({
+    platform,
+    resource_type: "heygen_private_voice",
+    data: {
+      id: voiceId,
+      ...(opts.language ? { language: opts.language } : {}),
+      ...(opts.gender ? { gender: opts.gender } : {}),
+      ...(opts.preview_audio_url
+        ? { preview_audio_url: opts.preview_audio_url }
+        : {}),
+    },
+    name: opts.name,
+    credentialsIn: "body",
+  });
+}
+
 export async function createHeygenPrivateVideoResource(
   platform: string,
   videoId: string,
@@ -261,6 +324,81 @@ export async function createHeygenPrivateVideoResource(
     resource_type: "heygen_private_video",
     data: { id: videoId, ...(opts.image_url ? { image_url: opts.image_url } : {}) },
     name: opts.name,
+    credentialsIn: "body",
+  });
+}
+
+export interface DeleteCatalogResourceOptions {
+  /** Tenant/platform key. Required. */
+  platform: string;
+  /** Resource type discriminator (e.g. "video_prompt"). Required. */
+  resource_type: string;
+  /** Acting user; defaults to `getCurrentUsername()` when omitted. */
+  username?: string;
+}
+
+/**
+ * Delete a catalog resource by its numeric `id`.
+ *
+ *   DELETE {dmUrl}/api/catalog/resources/
+ *     ?id=<id>&resource_type=<type>&platform_key=<tenant>&username=<user>
+ *
+ * All identifiers travel in the query string. The backend has no update
+ * endpoint — callers update by deleting and re-creating.
+ */
+export async function deleteCatalogResource(
+  id: number,
+  options: DeleteCatalogResourceOptions,
+): Promise<void> {
+  if (!options.platform) {
+    throw new Error("catalog: platform is required");
+  }
+  if (!options.resource_type) {
+    throw new Error("catalog: resource_type is required");
+  }
+  const username = options.username ?? getCurrentUsername();
+
+  const url = new URL(`${config.dmUrl()}/api/catalog/resources/`);
+  url.searchParams.set("id", String(id));
+  url.searchParams.set("resource_type", options.resource_type);
+  url.searchParams.set("platform_key", options.platform);
+  if (username) url.searchParams.set("username", username);
+
+  const res = await fetch(url.toString(), {
+    method: "DELETE",
+    headers: { ...authHeaders(), Accept: "application/json" },
+  });
+  if (!res.ok && res.status !== 204) {
+    throw new Error(
+      `catalog resource delete failed: ${res.status} ${res.statusText}`,
+    );
+  }
+}
+
+/**
+ * Platform-wide video prompt gallery entries. Each prompt is tenant-scoped
+ * and shared across all users on the platform.
+ */
+export async function listVideoPromptResources(
+  platform: string,
+): Promise<VideoPromptResource[]> {
+  if (!platform) return [];
+  return listCatalogResources<VideoPromptResourceData>({
+    platform,
+    resource_type: "video_prompt",
+  });
+}
+
+export async function createVideoPromptResource(
+  platform: string,
+  prompt: VideoPromptResourceData,
+): Promise<VideoPromptResource> {
+  return createCatalogResource<VideoPromptResourceData>({
+    platform,
+    resource_type: "video_prompt",
+    data: prompt,
+    name: prompt.title,
+    description: prompt.description,
     credentialsIn: "body",
   });
 }

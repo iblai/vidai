@@ -1,163 +1,133 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Search, Play } from "lucide-react"
+import { Search, Play, Loader2 } from "lucide-react"
 import Image from "next/image"
 import VideoPlayerModal from "@/components/modals/video-player-modal"
+import { listHeygenVideosPage, type HeygenVideoDetail } from "@/lib/heygen/rest"
+import { resolveAppTenant } from "@/lib/iblai/tenant"
 
-const categories = [
-  { id: "all", label: "All" },
-  { id: "business", label: "Business" },
-  { id: "computer-science", label: "Computer Science" },
-  { id: "humanities", label: "Humanities" },
-  { id: "math", label: "Math" },
-  { id: "nursing", label: "Nursing" },
-  { id: "science", label: "Science" },
-  { id: "social-sciences", label: "Social Sciences" },
-]
+/**
+ * Community lists videos from the platform's shared "main" tenant, not
+ * the viewer's own tenant — every user sees the same curated library.
+ */
+const MAIN_TENANT = "main"
 
-const characterVideos = [
-  {
-    id: "business-presentation-amelia",
-    name: "Aviation History with Amelia Earhart",
-    thumbnail: "/images/characters/amelia-earhart.webp",
-    duration: "8:30",
-    badge: "Business",
-    type: "character-video",
-    character: "Amelia Earhart",
-    model: "Heygen",
-    modelIcon: "/images/models/heygen.png",
-    createdAt: "2024-01-15",
-  },
-  {
-    id: "programming-tutorial-tesla",
-    name: "Invention Workshop with Nikola Tesla",
-    thumbnail: "/images/characters/nikola-tesla.webp",
-    duration: "12:45",
-    badge: "Computer Science",
-    type: "character-video",
-    character: "Nikola Tesla",
-    model: "D-ID",
-    modelIcon: "/images/models/d-id.svg",
-    createdAt: "2024-01-14",
-  },
-  {
-    id: "magic-training-houdini",
-    name: "Magic Performance Training with Harry Houdini",
-    thumbnail: "/images/characters/harry-houdini.webp",
-    duration: "15:20",
-    badge: "Nursing",
-    type: "character-video",
-    character: "Harry Houdini",
-    model: "Synthesia",
-    modelIcon: "/images/models/synthesia.svg",
-    createdAt: "2024-01-13",
-  },
-  {
-    id: "science-lesson-curie",
-    name: "Radioactivity Fundamentals with Marie Curie",
-    thumbnail: "/images/characters/marie-curie.webp",
-    duration: "18:15",
-    badge: "Math",
-    type: "character-video",
-    character: "Marie Curie",
-    model: "Heygen",
-    modelIcon: "/images/models/heygen.png",
-    createdAt: "2024-01-12",
-  },
-  {
-    id: "space-exploration-ride",
-    name: "Space Exploration with Sally Ride",
-    thumbnail: "/images/characters/sally-ride.webp",
-    duration: "20:30",
-    badge: "Science",
-    type: "character-video",
-    character: "Sally Ride",
-    model: "Synthesia",
-    modelIcon: "/images/models/synthesia.svg",
-    createdAt: "2024-01-11",
-  },
-]
+const PAGE_SIZE = 24
 
-const videoClips = [
-  {
-    id: "business-ethics-case-study",
-    name: "Business Ethics Case Study Analysis",
-    thumbnail: "/images/video-thumbnails/business-ethics-case-study.png",
-    duration: "12:30",
-    badge: "Business",
-    type: "video-clip",
-    model: "Veo 3",
-    modelIcon: "/images/models/veo3.png",
-    createdAt: "2024-01-11",
-  },
-  {
-    id: "programming-fundamentals",
-    name: "Programming Fundamentals in Python",
-    thumbnail: "/images/video-thumbnails/programming-fundamentals.png",
-    duration: "18:45",
-    badge: "Computer Science",
-    type: "video-clip",
-    model: "KlingAI",
-    modelIcon: "/images/models/kling.png",
-    createdAt: "2024-01-10",
-  },
-  {
-    id: "patient-care-protocols",
-    name: "Patient Care Protocols",
-    thumbnail: "/images/video-thumbnails/patient-care-protocols.png",
-    duration: "14:30",
-    badge: "Nursing",
-    type: "video-clip",
-    model: "Sora",
-    modelIcon: "/images/models/sora.png",
-    createdAt: "2024-01-09",
-  },
-  {
-    id: "calculus-derivatives",
-    name: "Understanding Calculus Derivatives",
-    thumbnail: "/images/video-thumbnails/calculus-derivatives.png",
-    duration: "22:15",
-    badge: "Math",
-    type: "video-clip",
-    model: "Runway",
-    modelIcon: "/images/models/runway.png",
-    createdAt: "2024-01-08",
-  },
-]
+interface CommunityVideo {
+  id: string
+  name: string
+  thumbnail: string
+  duration: string
+  videoUrl: string
+  createdAt: string
+  status: string
+}
 
-const allContent = [...characterVideos, ...videoClips]
+function formatDuration(seconds?: number): string {
+  if (!seconds || Number.isNaN(seconds)) return ""
+  const s = Math.round(seconds)
+  const m = Math.floor(s / 60)
+  const r = s % 60
+  return `${m}:${String(r).padStart(2, "0")}`
+}
 
-export default function LibraryPage() {
-  const [activeCategory, setActiveCategory] = useState("all")
-  const [activeContentType, setActiveContentType] = useState<string | null>(null)
+function toCommunityVideo(v: HeygenVideoDetail): CommunityVideo {
+  return {
+    id: v.id,
+    name: v.title || "Untitled",
+    thumbnail: v.thumbnail_url || "/placeholder.svg",
+    duration: formatDuration(v.duration),
+    videoUrl: v.video_url ?? "",
+    createdAt: v.created_at
+      ? new Date(v.created_at * 1000).toLocaleDateString()
+      : "",
+    status: (v.status ?? "").toLowerCase(),
+  }
+}
+
+export default function CommunityPage() {
+  const [videos, setVideos] = useState<CommunityVideo[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [token, setToken] = useState<string | undefined>(undefined)
+  const [hasMore, setHasMore] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedContent, setSelectedContent] = useState<(typeof allContent)[0] | null>(null)
-  const [videoPlayerOpen, setVideoPlayerOpen] = useState(false)
+  const [debouncedQuery, setDebouncedQuery] = useState("")
+  const [selected, setSelected] = useState<CommunityVideo | null>(null)
+  const [playerOpen, setPlayerOpen] = useState(false)
+  const [viewerTenant, setViewerTenant] = useState<string>("")
+  const requestIdRef = useRef(0)
 
-  const filteredContent = allContent.filter((content) => {
-    const matchesCategory =
-      activeCategory === "all" || content.badge.toLowerCase().replace(/\s+/g, "-") === activeCategory
-    const matchesContentType = activeContentType === null || content.type === activeContentType
-    const matchesSearch = content.name.toLowerCase().includes(searchQuery.toLowerCase())
+  useEffect(() => {
+    setViewerTenant(resolveAppTenant())
+  }, [])
 
-    return matchesCategory && matchesContentType && matchesSearch
-  })
+  const viewerOnMainTenant = viewerTenant === MAIN_TENANT
 
-  const handleContentClick = (content: (typeof allContent)[0]) => {
-    setSelectedContent(content)
-    setVideoPlayerOpen(true)
+  // Debounce the search input so we only hit HeyGen once per typing burst.
+  useEffect(() => {
+    const handle = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 400)
+    return () => clearTimeout(handle)
+  }, [searchQuery])
+
+  const loadFirstPage = useCallback(async (title: string) => {
+    const requestId = ++requestIdRef.current
+    setLoading(true)
+    try {
+      const page = await listHeygenVideosPage({
+        limit: PAGE_SIZE,
+        title: title || undefined,
+        platform: MAIN_TENANT,
+      })
+      if (requestId !== requestIdRef.current) return
+      setVideos(page.data.map(toCommunityVideo).filter((v) => v.status !== "failed"))
+      setToken(page.next_token ?? undefined)
+      setHasMore(!!(page.has_more && page.next_token))
+    } catch (err) {
+      if (requestId !== requestIdRef.current) return
+      console.error("[community] load failed:", err)
+      setVideos([])
+      setHasMore(false)
+    } finally {
+      if (requestId === requestIdRef.current) setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadFirstPage(debouncedQuery)
+  }, [debouncedQuery, loadFirstPage])
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    try {
+      const page = await listHeygenVideosPage({
+        limit: PAGE_SIZE,
+        token,
+        title: debouncedQuery || undefined,
+        platform: MAIN_TENANT,
+      })
+      setVideos((prev) => [
+        ...prev,
+        ...page.data.map(toCommunityVideo).filter((v) => v.status !== "failed"),
+      ])
+      setToken(page.next_token ?? undefined)
+      setHasMore(!!(page.has_more && page.next_token))
+    } catch (err) {
+      console.error("[community] loadMore failed:", err)
+    } finally {
+      setLoadingMore(false)
+    }
   }
 
-  const handleChipClick = (contentType: string) => {
-    if (activeContentType === contentType) {
-      setActiveContentType(null) // Deselect if already selected
-    } else {
-      setActiveContentType(contentType) // Select new chip
-    }
+  const handleContentClick = (video: CommunityVideo) => {
+    setSelected(video)
+    setPlayerOpen(true)
   }
 
   return (
@@ -169,101 +139,108 @@ export default function LibraryPage() {
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
-              placeholder="Search"
+              placeholder="Search by title"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
             />
           </div>
         </div>
-
-        <div className="flex items-center gap-1 border-b border-gray-200 mb-4">
-          {categories.map((category) => (
-            <Button
-              key={category.id}
-              variant="ghost"
-              className={`px-4 py-2 rounded-none border-b-2 transition-colors ${
-                activeCategory === category.id
-                  ? "border-[#0376C1] text-[#0376C1] bg-blue-50"
-                  : "border-transparent text-gray-600 hover:text-gray-800 hover:bg-gray-50"
-              }`}
-              onClick={() => setActiveCategory(category.id)}
-            >
-              {category.label}
-            </Button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-2 mb-6">
-          <Button
-            variant="outline"
-            size="sm"
-            className={`rounded-md px-4 py-1 text-sm transition-colors ${
-              activeContentType === "character-video"
-                ? "bg-[#0376C1] text-white border-[#0376C1] hover:bg-[#0376C1] hover:text-white"
-                : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
-            }`}
-            onClick={() => handleChipClick("character-video")}
-          >
-            AI Avatar Video
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className={`rounded-md px-4 py-1 text-sm transition-colors ${
-              activeContentType === "video-clip"
-                ? "bg-[#0376C1] text-white border-[#0376C1] hover:bg-[#0376C1] hover:text-white"
-                : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
-            }`}
-            onClick={() => handleChipClick("video-clip")}
-          >
-            Video Clips
-          </Button>
-        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-        {filteredContent.map((content) => (
-          <Card
-            key={content.id}
-            className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border border-[#D0E0FF] bg-[#F5F8FF] group"
-            onClick={() => handleContentClick(content)}
-          >
-            <CardContent className="p-0">
-              <div className="relative aspect-video rounded-lg overflow-hidden">
-                <Image src={content.thumbnail || "/placeholder.svg"} alt={content.name} fill className="object-cover" />
-                <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                  <Play className="text-white w-12 h-12" />
-                </div>
-                <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
-                  {content.duration}
-                </div>
-                <div className="absolute bottom-2 left-2 bg-[#0376C1] text-white text-xs px-2 py-1 rounded">
-                  {content.type === "character-video" ? "AI Avatar Video" : "Video Clip"}
-                </div>
-              </div>
-              <div className="p-3 text-left">
-                <h3 className="font-medium text-[#4E5460] text-sm">{content.name}</h3>
-               
-                <p className="text-xs text-gray-500 mt-1">{content.createdAt}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-16 text-gray-500">
+          <Loader2 className="w-5 h-5 animate-spin mr-2" />
+          Loading videos…
+        </div>
+      ) : videos.length === 0 ? (
+        <div className="py-16 text-center text-gray-500">
+          {debouncedQuery
+            ? `No videos found matching "${debouncedQuery}".`
+            : viewerOnMainTenant
+              ? "No videos yet. Generate one on the Videos page to see it here."
+              : "No community videos available yet."}
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            {videos.map((video) => (
+              <Card
+                key={video.id}
+                className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border border-[#D0E0FF] bg-[#F5F8FF] group"
+                onClick={() => handleContentClick(video)}
+              >
+                <CardContent className="p-0">
+                  <div className="relative aspect-video rounded-lg overflow-hidden bg-gray-100">
+                    {video.thumbnail && (
+                      <Image
+                        src={video.thumbnail}
+                        alt={video.name}
+                        fill
+                        className="object-cover"
+                        unoptimized
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                      <Play className="text-white w-12 h-12" />
+                    </div>
+                    {video.duration && (
+                      <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
+                        {video.duration}
+                      </div>
+                    )}
+                    {video.status && video.status !== "completed" && (
+                      <div className="absolute top-2 left-2 bg-amber-500 text-white text-xs px-2 py-1 rounded capitalize">
+                        {video.status}
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3 text-left">
+                    <h3 className="font-medium text-[#4E5460] text-sm line-clamp-2">
+                      {video.name}
+                    </h3>
+                    {video.createdAt && (
+                      <p className="text-xs text-gray-500 mt-1">{video.createdAt}</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {hasMore && (
+            <div className="flex justify-center mt-8">
+              <Button
+                variant="outline"
+                onClick={loadMore}
+                disabled={loadingMore}
+              >
+                {loadingMore ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Loading more…
+                  </>
+                ) : (
+                  "Load more"
+                )}
+              </Button>
+            </div>
+          )}
+        </>
+      )}
 
       <VideoPlayerModal
-        isOpen={videoPlayerOpen}
-        onClose={() => setVideoPlayerOpen(false)}
+        isOpen={playerOpen}
+        onClose={() => setPlayerOpen(false)}
         video={
-          selectedContent
+          selected
             ? {
-                id: selectedContent.id,
-                title: selectedContent.name,
-                thumbnail: selectedContent.thumbnail,
-                videoUrl: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/luma-jCiFM7KKk5QHN1NOGuzcjBcWynmi7n.mp4", // Using sample video
-                duration: selectedContent.duration,
-                createdAt: selectedContent.createdAt,
+                id: selected.id,
+                title: selected.name,
+                thumbnail: selected.thumbnail,
+                videoUrl: selected.videoUrl,
+                duration: selected.duration,
+                createdAt: selected.createdAt,
               }
             : null
         }

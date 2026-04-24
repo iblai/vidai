@@ -12,6 +12,7 @@ import { RecordAudioModal } from "./record-audio-modal"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   createHeygenVideo,
+  resolveHeygenLookId,
   type HeygenVideoAspectRatio,
   type HeygenVideoResolution,
 } from "@/lib/heygen/rest"
@@ -128,8 +129,14 @@ export function CreateAvatarVideoModal({ open, onOpenChange, avatar }: CreateAva
         const voiceId = selectedVoice?.id ?? avatar.default_voice_id
         if (!voiceId) throw new Error("Missing voice_id for HeyGen video")
 
+        // `avatar.id` is the HeyGen group_id (what the catalog stores).
+        // `/v2/video/generate` wants a look_id. For photo avatars these
+        // happen to coincide, but digital twins have separate ids, so
+        // always resolve explicitly.
+        const lookId = await resolveHeygenLookId(avatar.id)
+
         const { video_id: videoId } = await createHeygenVideo({
-          avatar_id: avatar.id,
+          avatar_id: lookId,
           voice_id: voiceId,
           script,
           aspect_ratio: aspectRatio,

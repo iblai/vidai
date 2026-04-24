@@ -6,6 +6,19 @@ import {
   type HeygenVoice,
   type ListHeygenVoicesOptions,
 } from "@/lib/heygen/rest";
+import { listHeygenPrivateVoiceResources } from "@/lib/iblai/catalog";
+import { resolveAppTenant } from "@/lib/iblai/tenant";
+
+function dedupeByVoiceId(voices: HeygenVoice[]): HeygenVoice[] {
+  const seen = new Set<string>();
+  const out: HeygenVoice[] = [];
+  for (const v of voices) {
+    if (!v.voice_id || seen.has(v.voice_id)) continue;
+    seen.add(v.voice_id);
+    out.push(v);
+  }
+  return out;
+}
 
 export interface UseHeygenVoicesOptions {
   /** `public` = shared HeyGen library; `private` = user's cloned voices. */
@@ -46,13 +59,38 @@ export function useHeygenVoices(options: UseHeygenVoicesOptions) {
 
     (async () => {
       try {
-        const page = await listHeygenVoicesPage({
-          type,
-          limit: pageSize,
-          ...(filter ?? {}),
-        });
+        // Always pull catalog-registered private voices alongside the
+        // upstream HeyGen list. We render them first so tenant-curated
+        // clones surface before HeyGen's own library.
+        const platform = resolveAppTenant();
+        const [page, catalogVoices] = await Promise.all([
+          listHeygenVoicesPage({
+            type,
+            limit: pageSize,
+            ...(filter ?? {}),
+          }),
+          platform
+            ? listHeygenPrivateVoiceResources(platform).catch((err) => {
+                console.warn(
+                  "[use-heygen-voices] catalog voices failed:",
+                  err,
+                );
+                return [];
+              })
+            : Promise.resolve([]),
+        ]);
         if (cancelled) return;
-        setVoices(page.data);
+        const catalogAsVoices: HeygenVoice[] = catalogVoices
+          .filter((r) => r.data?.id)
+          .map((r) => ({
+            voice_id: r.data.id,
+            name: r.name || r.data.id,
+            language: r.data.language,
+            gender: r.data.gender,
+            preview_audio_url: r.data.preview_audio_url ?? null,
+            type: "private",
+          }));
+        setVoices(dedupeByVoiceId([...catalogAsVoices, ...page.data]));
         setToken(page.next_token ?? undefined);
         setHasMore(!!(page.has_more && page.next_token));
       } catch (err: unknown) {
@@ -81,7 +119,7 @@ export function useHeygenVoices(options: UseHeygenVoicesOptions) {
         ...(filter ?? {}),
       });
       if (page.data.length > 0) {
-        setVoices((prev) => [...prev, ...page.data]);
+        setVoices((prev) => dedupeByVoiceId([...prev, ...page.data]));
       }
       setToken(page.next_token ?? undefined);
       setHasMore(!!(page.has_more && page.next_token));

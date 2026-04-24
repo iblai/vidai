@@ -6,9 +6,12 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Slider } from "@/components/ui/slider"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Sparkles, Play, Pause, Clock3, Upload, LinkIcon, ChevronRight, Mic, FileText } from 'lucide-react'
+import { Sparkles, Play, Pause, Clock3, Upload, LinkIcon, ChevronRight, Mic, FileText, Loader2 } from 'lucide-react'
 import { RichTextEditor } from "@iblai/iblai-js/web-containers"
 import { ConversationStarters } from "@iblai/iblai-js/web-containers/next"
+import { ChooseVoiceModal, type ChosenVoice } from "@/components/modals/choose-voice-modal"
+import { generateHeygenSpeech, listHeygenVoicesPage } from "@/lib/heygen/rest"
+import { extractTextFromFile } from "@/lib/scripts/extract-text"
 
 type TabKey = "text" | "audio" | "files"
 
@@ -24,6 +27,25 @@ export default function AddScriptPage() {
   const [aiPrompt, setAiPrompt] = useState(
     "Photosynthesis for Grade 7 biology class (10-minute explanation with examples)"
   )
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+
+  // HeyGen TTS state
+  const [selectedVoice, setSelectedVoice] = useState<ChosenVoice | null>(null)
+  const [voiceModalOpen, setVoiceModalOpen] = useState(false)
+  const [isSynthesizing, setIsSynthesizing] = useState(false)
+  const [playbackError, setPlaybackError] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioUrlRef = useRef<string | null>(null)
+  const speechCacheRef = useRef<{ textKey: string; voiceId: string; speed: number; url: string } | null>(null)
+
+  // Audio-tab transcription (OpenAI Whisper)
+  const [isTranscribing, setIsTranscribing] = useState(false)
+  const [transcribeError, setTranscribeError] = useState<string | null>(null)
+
+  // Files-tab document extraction
+  const [isExtracting, setIsExtracting] = useState(false)
+  const [extractError, setExtractError] = useState<string | null>(null)
 
   const charLimit = 3875
   const plainText = useMemo(() => {
@@ -37,77 +59,228 @@ export default function AddScriptPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Speech Synthesis
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
-  const synth = typeof window !== "undefined" ? window.speechSynthesis : null
+  // Auto-pick the first public voice so the Play button works out of the box.
+  useEffect(() => {
+    if (selectedVoice) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const page = await listHeygenVoicesPage({ type: "public", engine: "starfish", limit: 1 })
+        const first = page.data?.[0]
+        if (cancelled || !first) return
+        setSelectedVoice({
+          id: first.voice_id,
+          name: first.name,
+          language: first.language,
+          gender: first.gender,
+          preview_audio_url: first.preview_audio_url ?? null,
+        })
+      } catch (err) {
+        console.warn("[scripts/add] default voice load failed:", err)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedVoice])
 
+  // Clean up any audio element + object URL on unmount.
   useEffect(() => {
     return () => {
-      // cleanup speech on unmount
-      if (synth && synth.speaking) synth.cancel()
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current = null
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handlePlayPause = () => {
-    if (!synth) return
-    if (!plainText.trim()) {
-      alert("Please type or generate a script first.")
-      return
+  const stopPlayback = () => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
     }
-
-    if (isPlaying) {
-      synth.pause()
-      setIsPlaying(false)
-      return
-    }
-
-    // Resume if paused
-    if (synth.paused) {
-      synth.resume()
-      setIsPlaying(true)
-      return
-    }
-
-    // Fresh start
-    const utterance = new SpeechSynthesisUtterance(plainText)
-    utterance.rate = speed[0] || 1
-    utterance.onend = () => {
-      setIsPlaying(false)
-      utteranceRef.current = null
-    }
-    utterance.onerror = () => {
-      setIsPlaying(false)
-      utteranceRef.current = null
-    }
-    utteranceRef.current = utterance
-    synth.speak(utterance)
-    setIsPlaying(true)
+    setIsPlaying(false)
   }
+
+  const handlePlayPause = async () => {
+    if (isSynthesizing) return
+    const text = plainText.trim()
+    if (!text) {
+      setPlaybackError("Please type or generate a script first.")
+      return
+    }
+    if (text.length > charLimit) {
+      setPlaybackError(
+        `Script is ${text.length.toLocaleString()} characters; max is ${charLimit.toLocaleString()}.`,
+      )
+      return
+    }
+    if (!selectedVoice) {
+      setPlaybackError("Please pick a voice first.")
+      return
+    }
+
+    // Toggle pause/resume if we already have audio.
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause()
+        setIsPlaying(false)
+        return
+      }
+      audioRef.current.play().then(
+        () => setIsPlaying(true),
+        () => setIsPlaying(false),
+      )
+      return
+    }
+
+    setPlaybackError(null)
+    const currentSpeed = speed[0] || 1
+    const cacheKey = { textKey: text, voiceId: selectedVoice.id, speed: currentSpeed }
+    const cached = speechCacheRef.current
+    let audioUrl: string | null =
+      cached &&
+      cached.textKey === cacheKey.textKey &&
+      cached.voiceId === cacheKey.voiceId &&
+      cached.speed === cacheKey.speed
+        ? cached.url
+        : null
+
+    if (!audioUrl) {
+      setIsSynthesizing(true)
+      try {
+        const res = await generateHeygenSpeech({
+          text,
+          voice_id: selectedVoice.id,
+          speed: currentSpeed,
+        })
+        audioUrl = res.audio_url
+        speechCacheRef.current = { ...cacheKey, url: audioUrl }
+      } catch (err) {
+        console.error("[scripts/add] TTS failed:", err)
+        setPlaybackError((err as Error)?.message ?? "Failed to generate speech.")
+        return
+      } finally {
+        setIsSynthesizing(false)
+      }
+    }
+
+    const audio = new Audio(audioUrl)
+    audio.onended = () => {
+      setIsPlaying(false)
+      audioRef.current = null
+    }
+    audio.onerror = () => {
+      setIsPlaying(false)
+      audioRef.current = null
+      setPlaybackError("Failed to play audio.")
+    }
+    audioRef.current = audio
+    audioUrlRef.current = audioUrl
+    try {
+      await audio.play()
+      setIsPlaying(true)
+    } catch (err) {
+      // AbortError fires when pause() interrupts a pending play() promise —
+      // e.g. the user tweaks the script/voice/speed mid-playback and our
+      // invalidation effect stops the audio. Nothing actionable for the
+      // user, so swallow it.
+      if ((err as Error)?.name === "AbortError") return
+      audioRef.current = null
+      setPlaybackError((err as Error)?.message ?? "Failed to play audio.")
+    }
+  }
+
+  // Invalidate cached audio + stop playback when script/voice/speed change.
+  useEffect(() => {
+    speechCacheRef.current = null
+    stopPlayback()
+    audioRef.current = null
+  }, [plainText, selectedVoice?.id, speed])
 
   const handleSpeedChange = (val: number[]) => {
     setSpeed(val)
-    // If speaking and we change speed, restart at new rate
-    if (synth && synth.speaking && utteranceRef.current) {
-      const currentText = plainText
-      synth.cancel()
-      const u = new SpeechSynthesisUtterance(currentText)
-      u.rate = val[0] || 1
-      u.onend = () => {
-        setIsPlaying(false)
-        utteranceRef.current = null
-      }
-      u.onerror = () => {
-        setIsPlaying(false)
-        utteranceRef.current = null
-      }
-      utteranceRef.current = u
-      synth.speak(u)
-      setIsPlaying(true)
-    }
   }
 
   const handleUploadClick = () => fileInputRef.current?.click()
+
+  const transcribeAudioFile = async (file: File) => {
+    const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
+    if (!apiKey) {
+      setTranscribeError("OpenAI API key is not configured.")
+      return
+    }
+    setTranscribeError(null)
+    setIsTranscribing(true)
+    try {
+      const body = new FormData()
+      body.append("file", file)
+      body.append("model", "whisper-1")
+      body.append("response_format", "text")
+      const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body,
+      })
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "")
+        throw new Error(`Whisper ${res.status}: ${detail || res.statusText}`)
+      }
+      const text = (await res.text()).trim()
+      if (!text) throw new Error("Whisper returned an empty transcript.")
+      setScript(plainTextToHtml(text))
+      setActiveTab("text")
+    } catch (err) {
+      console.error("[scripts/add] transcription failed:", err)
+      setTranscribeError((err as Error)?.message ?? "Failed to transcribe audio.")
+    } finally {
+      setIsTranscribing(false)
+    }
+  }
+
+  const handleAudioDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file && file.type.startsWith("audio/")) {
+      transcribeAudioFile(file)
+    } else if (file) {
+      setTranscribeError("Please drop an audio file.")
+    }
+  }
+
+  const extractFromDocument = async (file: File) => {
+    setExtractError(null)
+    setIsExtracting(true)
+    try {
+      const text = (await extractTextFromFile(file)).trim()
+      if (!text) throw new Error("The file contained no extractable text.")
+      setScript(plainTextToHtml(text))
+      setActiveTab("text")
+    } catch (err) {
+      console.error("[scripts/add] file extraction failed:", err)
+      setExtractError((err as Error)?.message ?? "Failed to extract text.")
+    } finally {
+      setIsExtracting(false)
+    }
+  }
+
+  const handleFilesDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) extractFromDocument(file)
+  }
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (activeTab === "audio") transcribeAudioFile(file)
+      else if (activeTab === "files") extractFromDocument(file)
+    }
+    // Reset so picking the same file twice still triggers onChange.
+    e.target.value = ""
+  }
 
   const onDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -122,11 +295,58 @@ export default function AddScriptPage() {
     setIsDragOver(false)
   }
 
-  const handleGenerateFromAI = () => {
-    const topic = aiPrompt?.trim() || "General Lesson"
-    const generated = generateLessonScript(topic)
-    setScript(generated)
-    setAiOpen(false)
+  const handleGenerateFromAI = async () => {
+    const topic = aiPrompt?.trim()
+    if (!topic) {
+      setAiError("Please describe the lesson or topic first.")
+      return
+    }
+    const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
+    if (!apiKey) {
+      setAiError("OpenAI API key is not configured.")
+      return
+    }
+
+    setIsGenerating(true)
+    setAiError(null)
+    try {
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          temperature: 0.7,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You write spoken scripts for an AI video avatar presenting a lesson. Return only the script itself — no stage directions, section headers, markdown, or preamble. Write in natural, conversational prose the avatar will read aloud. Use short paragraphs separated by a blank line. Keep it engaging, clear, and age-appropriate to the request. Aim for 300–500 words unless the prompt specifies otherwise.",
+            },
+            {
+              role: "user",
+              content: `Write a script for this lesson:\n\n${topic}`,
+            },
+          ],
+        }),
+      })
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "")
+        throw new Error(`OpenAI ${res.status}: ${detail || res.statusText}`)
+      }
+      const json = await res.json()
+      const text: string = json?.choices?.[0]?.message?.content?.trim() ?? ""
+      if (!text) throw new Error("OpenAI returned an empty response.")
+      setScript(plainTextToHtml(text))
+      setAiOpen(false)
+    } catch (err) {
+      console.error("[scripts/add] AI generate failed:", err)
+      setAiError((err as Error)?.message ?? "Failed to generate script.")
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   return (
@@ -169,8 +389,15 @@ export default function AddScriptPage() {
                         aria-label={isPlaying ? "Pause" : "Play"}
                         className="h-8 w-8 rounded-full"
                         onClick={handlePlayPause}
+                        disabled={isSynthesizing}
                       >
-                        {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                        {isSynthesizing ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : isPlaying ? (
+                          <Pause className="w-4 h-4" />
+                        ) : (
+                          <Play className="w-4 h-4" />
+                        )}
                       </Button>
                       <Button
                         type="button"
@@ -182,57 +409,116 @@ export default function AddScriptPage() {
                         AI Help
                       </Button>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-600">
+                    <div
+                      className={`flex items-center gap-2 text-xs ${
+                        charCount > charLimit ? "text-red-600 font-medium" : "text-gray-600"
+                      }`}
+                    >
                       <Clock3 className="w-4 h-4" />
-                      <span>{`${charCount.toLocaleString()}/${charLimit.toLocaleString()} AI avatars`}</span>
+                      <span>{`${charCount.toLocaleString()}/${charLimit.toLocaleString()} Characters`}</span>
                     </div>
                   </div>
+                  {playbackError && (
+                    <p className="mt-2 text-sm text-red-600">{playbackError}</p>
+                  )}
                 </div>
               )}
 
               {activeTab === "audio" && (
                 <div className="space-y-3">
                   <Dropzone
-                    icon={<Mic className="w-6 h-6 text-gray-400" />}
-                    title="Drag & drop an audio, paste from clipboard, or upload a file"
+                    icon={
+                      isTranscribing ? (
+                        <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+                      ) : (
+                        <Mic className="w-6 h-6 text-gray-400" />
+                      )
+                    }
+                    title={
+                      isTranscribing
+                        ? "Transcribing audio with Whisper…"
+                        : "Drag & drop an audio file or upload one — it will be transcribed to your script"
+                    }
                     isDragOver={isDragOver}
                     onDragOver={onDragOver}
                     onDragLeave={onDragLeave}
-                    onDrop={onDrop}
+                    onDrop={handleAudioDrop}
                     onUploadClick={handleUploadClick}
+                    disabled={isTranscribing}
                   />
-                  <p className="text-xs text-gray-500">Supported formats: MP3, WAV. Max size: 20MB.</p>
+                  <p className="text-xs text-gray-500">
+                    Supported formats: MP3, WAV, M4A, WEBM, OGG. Max size: 25MB.
+                  </p>
+                  {transcribeError && (
+                    <p className="text-sm text-red-600">{transcribeError}</p>
+                  )}
                 </div>
               )}
 
               {activeTab === "files" && (
                 <div className="space-y-3">
                   <Dropzone
-                    icon={<FileText className="w-6 h-6 text-gray-400" />}
-                    title="Drag & drop an lesson, presentations, paste from clipboard, or upload a file"
+                    icon={
+                      isExtracting ? (
+                        <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+                      ) : (
+                        <FileText className="w-6 h-6 text-gray-400" />
+                      )
+                    }
+                    title={
+                      isExtracting
+                        ? "Extracting text from document…"
+                        : "Drag & drop a lesson or presentation — the text will seed your script"
+                    }
                     isDragOver={isDragOver}
                     onDragOver={onDragOver}
                     onDragLeave={onDragLeave}
-                    onDrop={onDrop}
+                    onDrop={handleFilesDrop}
                     onUploadClick={handleUploadClick}
+                    disabled={isExtracting}
                   />
                   <p className="text-xs text-gray-500">Supported formats: DOCX, PPTX, TXT, PDF. Max size: 20MB.</p>
+                  {extractError && (
+                    <p className="text-sm text-red-600">{extractError}</p>
+                  )}
                 </div>
               )}
 
               {/* Hidden input for uploads */}
-              <input ref={fileInputRef} type="file" className="hidden" />
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept={
+                  activeTab === "audio"
+                    ? "audio/*"
+                    : activeTab === "files"
+                      ? ".txt,.docx,.pdf,.pptx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                      : undefined
+                }
+                onChange={handleFileInputChange}
+              />
 
               {/* Voice row */}
               <div className="mt-4">
-                <button className="w-full rounded-md border border-[#E6EDFC] bg-[#E6EDFC] text-[#4E5460] px-4 py-3 flex items-center justify-between">
+                <button
+                  type="button"
+                  className="w-full rounded-md border border-[#E6EDFC] bg-[#E6EDFC] text-[#4E5460] px-4 py-3 flex items-center justify-between hover:bg-[#d9e6fb] transition-colors"
+                  onClick={() => setVoiceModalOpen(true)}
+                >
                   <div className="flex items-center gap-3">
                     <div className="h-8 w-8 rounded-full bg-white border border-gray-200 flex items-center justify-center">
-                      <span className="text-sm font-medium">Aa</span>
+                      <span className="text-sm font-medium">
+                        {selectedVoice?.name?.[0] ?? "Aa"}
+                      </span>
                     </div>
                     <div className="text-left">
-                      <div className="font-medium">Emma</div>
-                      <div className="text-xs text-gray-500">English (United States)</div>
+                      <div className="font-medium">
+                        {selectedVoice?.name ?? "Choose a voice"}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {selectedVoice?.language ?? "Click to browse HeyGen voices"}
+                      </div>
                     </div>
                   </div>
                   <ChevronRight className="w-4 h-4 text-gray-500" />
@@ -259,7 +545,9 @@ export default function AddScriptPage() {
                 By describing imagined text or audio reference, you can obtain the desired script.
               </p>
 
-              <div className="mt-6">
+              <div
+                className="mt-6 [&_.grid]:!grid-cols-1 [&_.grid]:!gap-4 [&_.p-4]:!p-6 [&_.text-sm]:!text-base [&_.text-sm]:!leading-7 [&_h2]:!mb-4 [&_.max-w-6xl]:!max-w-none [&_.px-4]:!px-0"
+              >
                 <ConversationStarters
                   guidedPrompts={[
                     { prompt: "Photosynthesis for Grade 7 biology class", icon: "leaf" },
@@ -279,8 +567,25 @@ export default function AddScriptPage() {
         </Card>
       </div>
 
+      <ChooseVoiceModal
+        open={voiceModalOpen}
+        onOpenChange={setVoiceModalOpen}
+        onSelectVoice={(v) => {
+          setSelectedVoice(v)
+          setVoiceModalOpen(false)
+        }}
+        filter={{ engine: "starfish" }}
+      />
+
       {/* AI Help Dialog */}
-      <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+      <Dialog
+        open={aiOpen}
+        onOpenChange={(open) => {
+          if (isGenerating) return
+          setAiOpen(open)
+          if (!open) setAiError(null)
+        }}
+      >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-[#4E5460]">AI Help</DialogTitle>
@@ -292,15 +597,39 @@ export default function AddScriptPage() {
               onChange={(e) => setAiPrompt(e.target.value)}
               placeholder="e.g., Introduction to fractions for Grade 4 with real-life examples"
               className="min-h-[120px] resize-none"
+              disabled={isGenerating}
             />
+            {aiError && (
+              <p className="text-sm text-red-600">{aiError}</p>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAiOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setAiError(null)
+                setAiOpen(false)
+              }}
+              disabled={isGenerating}
+            >
               Cancel
             </Button>
-            <Button onClick={handleGenerateFromAI} className="bg-[#0376C1] hover:bg-[#056fb4] text-white">
-              <Sparkles className="w-4 h-4 mr-2" />
-              Generate
+            <Button
+              onClick={handleGenerateFromAI}
+              className="bg-[#0376C1] hover:bg-[#056fb4] text-white"
+              disabled={isGenerating}
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generating…
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Generate
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -332,6 +661,7 @@ function Dropzone({
   onDragLeave,
   onDrop,
   onUploadClick,
+  disabled,
 }: {
   icon: React.ReactNode
   title: string
@@ -340,12 +670,13 @@ function Dropzone({
   onDragLeave: (e: React.DragEvent) => void
   onDrop: (e: React.DragEvent) => void
   onUploadClick: () => void
+  disabled?: boolean
 }) {
   return (
     <div
       className={`rounded-lg border-2 border-dashed p-10 text-center transition-colors ${
         isDragOver ? "border-[#0376C1] bg-blue-50" : "border-gray-300"
-      }`}
+      } ${disabled ? "opacity-60 pointer-events-none" : ""}`}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
@@ -360,6 +691,7 @@ function Dropzone({
         <Button
           variant="outline"
           size="sm"
+          disabled={disabled}
           onClick={(e) => {
             e.stopPropagation()
             onUploadClick()
@@ -371,6 +703,7 @@ function Dropzone({
         <Button
           variant="outline"
           size="sm"
+          disabled={disabled}
           onClick={(e) => {
             e.stopPropagation()
           }}
@@ -383,42 +716,18 @@ function Dropzone({
   )
 }
 
-function generateLessonScript(topic: string) {
-  return `Lesson Plan: ${topic}
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+}
 
-Objective:
-- Students will understand key concepts and be able to explain them in their own words.
-- Students will apply the concept through a short practice activity.
-
-Warm‑Up (2 min):
-- Quick question: What do you already know about ${topic.toLowerCase()}?
-- Show one real‑life example and let 2–3 students share.
-
-Direct Instruction (3 min):
-- Definition: Provide a clear, student‑friendly definition.
-- Key idea #1
-- Key idea #2
-- Visual/Diagram: Draw or display a simple visual to anchor the concept.
-
-Guided Practice (3 min):
-- Work through 2 short examples together as a class.
-- Ask checking‑for‑understanding questions after each step.
-
-Independent Practice (4 min):
-- Students complete 3 quick problems or a short prompt in pairs.
-- Teacher circulates, gives feedback, and selects 1–2 examples to share.
-
-Formative Check (2 min):
-- Exit ticket: “In one sentence, explain ${topic.toLowerCase()} and give a real‑world example.”
-
-Extension/Differentiation:
-- Early finishers: Create your own example and swap with a partner to solve.
-- Support: Provide a scaffolded example with hints.
-
-Homework (optional):
-- Watch a 3‑minute video or read a short paragraph about ${topic.toLowerCase()} and bring one question to class.
-
-Teacher Notes:
-- Emphasize clarity, concrete examples, and frequent checks for understanding.
-- Keep transitions tight to maintain lesson momentum.`
+function plainTextToHtml(text: string): string {
+  return text
+    .split(/\n{2,}/)
+    .map((para) =>
+      `<p>${escapeHtml(para.trim()).replace(/\n/g, "<br />")}</p>`,
+    )
+    .join("")
 }

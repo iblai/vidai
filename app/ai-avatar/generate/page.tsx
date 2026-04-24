@@ -12,6 +12,10 @@ import {
   uploadHeygenAsset,
   createHeygenPhotoAvatarGroup,
   finalizeAndTrainPhotoAvatarGroup,
+  createHeygenDigitalTwinAvatar,
+  createHeygenAvatarConsentUrl,
+  extractVideoFrameJpeg,
+  ensureUnsignedImageUrl,
 } from "@/lib/heygen/rest"
 import { createHeygenPrivateAvatarResource } from "@/lib/iblai/catalog"
 import { resolveAppTenant } from "@/lib/iblai/tenant"
@@ -126,40 +130,73 @@ export default function CreateAvatarPage() {
     }, 250)
 
     try {
-      if (file.type.startsWith("video/")) {
-        throw new Error(
-          "Digital-twin (video) avatars aren't supported yet — please upload a photo.",
-        )
-      }
-
       const platform = resolveAppTenant()
       if (!platform) throw new Error("No tenant resolved — cannot register avatar")
 
       const name = file.name.replace(/\.[^.]+$/, "") || "Untitled"
+      const isVideo = file.type.startsWith("video/")
 
-      // 1. Upload the raw photo → image_key.
-      const asset = await uploadHeygenAsset(file)
+      let groupId: string
+      let imageUrl: string | undefined
 
-      // 2. Create a photo-avatar group from that image_key.
-      const group = await createHeygenPhotoAvatarGroup({
-        name,
-        image_key: asset.image_key,
-      })
-      if (!group.group_id) {
-        throw new Error("HeyGen did not return a group_id")
+      if (isVideo) {
+        // 1a. Capture a thumbnail frame client-side and upload it as an
+        // image asset. HeyGen's digital-twin `preview_image_url` points
+        // at an unsigned CloudFront path that browsers can't fetch (403),
+        // so we store our own captured frame on the catalog side.
+        const frameBlob = await extractVideoFrameJpeg(file)
+        const thumb = await uploadHeygenAsset(frameBlob)
+        imageUrl = await ensureUnsignedImageUrl(thumb.url)
+
+        // 2a. Upload the video, then create a digital-twin avatar from
+        // it. HeyGen trains asynchronously — we don't wait for that.
+        const videoAsset = await uploadHeygenAsset(file)
+        const dt = await createHeygenDigitalTwinAvatar({
+          name,
+          asset_id: videoAsset.id,
+        })
+        groupId = dt.avatar_group.id
+
+        // If this tenant enforces consent, open the consent URL in a
+        // new tab so the subject can complete it. Training won't finish
+        // until consent is granted.
+        if (
+          dt.avatar_group.consent_status !== "skipped" &&
+          dt.avatar_group.consent_status !== "completed"
+        ) {
+          try {
+            const { consent_url } = await createHeygenAvatarConsentUrl(groupId)
+            if (consent_url) window.open(consent_url, "_blank", "noopener")
+          } catch (err) {
+            console.warn("[generate] consent URL fetch failed", err)
+          }
+        }
+      } else {
+        // 1b. Upload the photo asset.
+        const asset = await uploadHeygenAsset(file)
+
+        // 2b. Photo avatar: create group → wait for photo to finalize →
+        // kick off training. Training runs async after this returns.
+        const group = await createHeygenPhotoAvatarGroup({
+          name,
+          image_key: asset.image_key,
+        })
+        if (!group.group_id) throw new Error("HeyGen did not return a group_id")
+        await finalizeAndTrainPhotoAvatarGroup(group.group_id)
+        groupId = group.group_id
+        // `asset.url` is the long-lived unsigned `/v1/asset` URL of the
+        // photo we just uploaded — always use it. We route through
+        // `ensureUnsignedImageUrl` defensively so that if HeyGen ever
+        // starts signing this path, we'll transparently re-host it via
+        // /v1/asset again.
+        imageUrl = await ensureUnsignedImageUrl(asset.url)
       }
 
-      // 3. Wait for HeyGen to finish processing the photo, then kick off
-      // training. Training itself takes minutes — we don't wait for that;
-      // we just want `train` to be accepted before we register the
-      // avatar so the user sees a valid "processing" avatar in the list.
-      await finalizeAndTrainPhotoAvatarGroup(group.group_id)
-
-      // 4. Register the group in the ibl.ai catalog so it's visible to
+      // 3. Register the group in the ibl.ai catalog so it's visible to
       // the tenant.
-      await createHeygenPrivateAvatarResource(platform, group.group_id, {
+      await createHeygenPrivateAvatarResource(platform, groupId, {
         name,
-        image_url: group.image_url || asset.url,
+        image_url: imageUrl,
       })
 
       clearInterval(progressInterval)

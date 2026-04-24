@@ -8,6 +8,9 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { ChooseVoiceModal } from "@/components/modals/choose-voice-modal"
 import { ShareModal } from "@/components/modals/share-modal"
+import { getHeygenAvatarGroup } from "@/lib/heygen/rest"
+import { listHeygenPrivateAvatarResources } from "@/lib/iblai/catalog"
+import { resolveAppTenant } from "@/lib/iblai/tenant"
 
 export default function InteractiveAvatarPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise)
@@ -37,6 +40,8 @@ export default function InteractiveAvatarPage({ params: paramsPromise }: { param
   const [maxSessionDuration, setMaxSessionDuration] = useState("3600")
 
   useEffect(() => {
+    let cancelled = false
+
     const savedCharacters = localStorage.getItem("myCharacters")
     if (savedCharacters) {
       const characters = JSON.parse(savedCharacters)
@@ -70,6 +75,60 @@ export default function InteractiveAvatarPage({ params: paramsPromise }: { param
         agentId: "b9a8ace6-0763-455c-b79d-8b83b6ca8bed",
         faceId: "0c2b8b04-5274-41f1-a21c-d5c98322efa9",
       })
+      return
+    }
+
+    // Not a known static character — treat as a HeyGen avatar group id.
+    // Fetch group metadata + the catalog's stored thumbnail so the page
+    // renders for user-created avatars too.
+    ;(async () => {
+      try {
+        const platform = resolveAppTenant()
+        const [group, resources] = await Promise.all([
+          getHeygenAvatarGroup(params.id).catch(() => null),
+          platform
+            ? listHeygenPrivateAvatarResources(platform).catch(() => [])
+            : Promise.resolve([]),
+        ])
+        if (cancelled) return
+        const catalogHit = resources.find((r) => r.data?.id === params.id)
+        if (group || catalogHit) {
+          setCharacter({
+            id: params.id,
+            name: group?.name || catalogHit?.name || "AI Avatar",
+            image:
+              catalogHit?.data?.image_url ||
+              group?.preview_image_url ||
+              "/placeholder.svg",
+            agentId: params.id,
+            faceId: params.id,
+          })
+        } else {
+          // Unknown id — render something rather than spin forever.
+          setCharacter({
+            id: params.id,
+            name: "AI Avatar",
+            image: "/placeholder.svg",
+            agentId: params.id,
+            faceId: params.id,
+          })
+        }
+      } catch (err) {
+        console.warn("[interactive/[id]] fallback load failed", err)
+        if (!cancelled) {
+          setCharacter({
+            id: params.id,
+            name: "AI Avatar",
+            image: "/placeholder.svg",
+            agentId: params.id,
+            faceId: params.id,
+          })
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
     }
   }, [params.id])
 

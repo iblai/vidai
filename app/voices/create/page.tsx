@@ -8,6 +8,14 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Upload, Mic, Play, Pause, Loader2, ArrowLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { uploadHeygenAsset, cloneHeygenVoice } from "@/lib/heygen/rest"
+import { createHeygenPrivateVoiceResource } from "@/lib/iblai/catalog"
+import { resolveAppTenant } from "@/lib/iblai/tenant"
+
+const LANGUAGE_TO_CODE: Record<string, string> = {
+  English: "en",
+  Spanish: "es",
+}
 
 export default function CreateVoicePage() {
   const router = useRouter()
@@ -17,7 +25,7 @@ export default function CreateVoicePage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -72,39 +80,33 @@ export default function CreateVoicePage() {
   const handleCreateVoice = async () => {
     if (!selectedFile || !voiceName.trim()) return
 
+    setCreateError(null)
     setIsUploading(true)
-    setUploadProgress(0)
 
-    const progressInterval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 90) {
-          clearInterval(progressInterval)
-          return prev
-        }
-        return prev + Math.random() * 15
+    try {
+      const asset = await uploadHeygenAsset(selectedFile)
+      const { voice_clone_id: voiceId } = await cloneHeygenVoice({
+        voice_name: voiceName.trim(),
+        audio_asset_id: asset.id,
+        language: LANGUAGE_TO_CODE[language],
       })
-    }, 200)
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 3000))
-
-    clearInterval(progressInterval)
-    setUploadProgress(100)
-
-    // Save voice to localStorage
-    const existingVoices = JSON.parse(localStorage.getItem("myVoices") || "[]")
-    const newVoice = {
-      id: `voice_${Date.now()}`,
-      name: voiceName,
-      language,
-      accent,
-      createdAt: new Date().toISOString(),
-    }
-    localStorage.setItem("myVoices", JSON.stringify([...existingVoices, newVoice]))
-
-    setTimeout(() => {
+      const platform = resolveAppTenant()
+      if (platform && voiceId) {
+        try {
+          await createHeygenPrivateVoiceResource(platform, voiceId, {
+            name: voiceName.trim(),
+            language: LANGUAGE_TO_CODE[language],
+          })
+        } catch (err) {
+          console.warn("[voice-clone] catalog register failed:", err)
+        }
+      }
       router.back()
-    }, 500)
+    } catch (err) {
+      console.error("[voice-clone] create failed:", err)
+      setCreateError((err as Error)?.message ?? "Failed to create voice")
+      setIsUploading(false)
+    }
   }
 
   return (
@@ -147,13 +149,6 @@ export default function CreateVoicePage() {
                         <SelectContent>
                           <SelectItem value="English">English</SelectItem>
                           <SelectItem value="Spanish">Spanish</SelectItem>
-                          <SelectItem value="French">French</SelectItem>
-                          <SelectItem value="German">German</SelectItem>
-                          <SelectItem value="Italian">Italian</SelectItem>
-                          <SelectItem value="Portuguese">Portuguese</SelectItem>
-                          <SelectItem value="Japanese">Japanese</SelectItem>
-                          <SelectItem value="Korean">Korean</SelectItem>
-                          <SelectItem value="Chinese">Chinese</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -266,7 +261,7 @@ export default function CreateVoicePage() {
               {isUploading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Creating Voice... {Math.round(uploadProgress)}%
+                  Creating Voice...
                 </>
               ) : (
                 <>
@@ -275,6 +270,10 @@ export default function CreateVoicePage() {
                 </>
               )}
             </Button>
+
+            {createError && (
+              <p className="text-sm text-red-600">{createError}</p>
+            )}
           </div>
 
           {/* Right Panel */}
@@ -314,9 +313,7 @@ export default function CreateVoicePage() {
                 <div className="bg-white rounded-lg p-4 border border-gray-200">
                   <h4 className="font-medium text-[#4E5460] mb-2">Supported providers</h4>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">ElevenLabs</span>
-                    <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">Cartesia</span>
-                    <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">Google</span>
+                    <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">HeyGen</span>
                   </div>
                 </div>
               </div>
